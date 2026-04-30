@@ -1,0 +1,1108 @@
+{
+  "info": {
+    "name": "Ematony Backend API - Planned Collection",
+    "_postman_id": "f7db3208-6a08-486e-9c34-8fbef7e6d4d0",
+    "description": "Planned-state Postman collection derived from the Ematony Figma design. Some endpoints below are target endpoints for upcoming modules and are not fully implemented in the current backend yet.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "user_id", "value": "" },
+    { "key": "group_id", "value": "" },
+    { "key": "group_request_id", "value": "" },
+    { "key": "group_cycle_id", "value": "" },
+    { "key": "payment_id", "value": "" },
+    { "key": "payment_method_id", "value": "" },
+    { "key": "kyc_id", "value": "" },
+    { "key": "ticket_id", "value": "" },
+    { "key": "notification_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Carter\",\n  \"email\": \"john@example.com\",\n  \"phone\": \"+1-555-0100\",\n  \"password\": \"Password123!\",\n  \"confirmPassword\": \"Password123!\",\n  \"acceptedTerms\": true\n}"
+            },
+            "url": "{{base_url}}/auth/register",
+            "description": "Create a member account. Sample success: {\"success\":true,\"data\":{\"user\":{\"id\":1},\"accessToken\":\"jwt\",\"refreshToken\":\"jwt\"}}"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{base_url}}/auth/login",
+            "description": "Login for member or admin. Sample success: {\"success\":true,\"data\":{\"user\":{\"role\":\"admin\"},\"accessToken\":\"jwt\",\"refreshToken\":\"jwt\"}}"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/logout",
+            "description": "Logout and revoke refresh token. Sample success: {\"success\":true,\"message\":\"Logged out\"}"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/refresh-token",
+            "description": "Rotate access token. Sample success: {\"success\":true,\"data\":{\"accessToken\":\"jwt\",\"refreshToken\":\"jwt\"}}"
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\"\n}"
+            },
+            "url": "{{base_url}}/auth/forgot-password",
+            "description": "Send reset OTP. Sample success: {\"success\":true,\"data\":{\"emailMasked\":\"j***@example.com\"}}"
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"otp\": \"123456\",\n  \"purpose\": \"password_reset\"\n}"
+            },
+            "url": "{{base_url}}/auth/verify-otp",
+            "description": "Verify OTP before reset. Sample success: {\"success\":true,\"data\":{\"verified\":true}}"
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"otp\": \"123456\",\n  \"password\": \"NewPassword123!\",\n  \"confirmPassword\": \"NewPassword123!\"\n}"
+            },
+            "url": "{{base_url}}/auth/reset-password",
+            "description": "Reset password with OTP. Sample success: {\"success\":true,\"message\":\"Password reset successfully\"}"
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"BetterPassword123!\",\n  \"confirmPassword\": \"BetterPassword123!\"\n}"
+            },
+            "url": "{{base_url}}/auth/change-password",
+            "description": "Change password while logged in. Sample success: {\"success\":true,\"message\":\"Password changed\"}"
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/auth/me",
+            "description": "Fetch current session user. Sample success: {\"success\":true,\"data\":{\"user\":{\"id\":1,\"role\":\"member\"}}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "App",
+      "item": [
+        {
+          "name": "Home Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/dashboard/home",
+            "description": "Member app home summary. Sample success: {\"success\":true,\"data\":{\"walletSummary\":{},\"activeGroups\":[],\"pendingRequests\":0}}"
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/profile",
+            "description": "Profile screen bootstrap. Sample success: {\"success\":true,\"data\":{\"user\":{},\"kycStatus\":\"approved\"}}"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Carter\",\n  \"phone\": \"+1-555-0100\",\n  \"country\": \"USA\",\n  \"language\": \"en\",\n  \"avatarUrl\": \"https://cdn.example.com/avatar.jpg\"\n}"
+            },
+            "url": "{{base_url}}/profile",
+            "description": "Update member profile. Sample success: {\"success\":true,\"data\":{\"user\":{\"name\":\"John Carter\"}}}"
+          }
+        },
+        {
+          "name": "Get Privacy Policy",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/content/privacy-policy",
+            "description": "Public CMS page. Sample success: {\"success\":true,\"data\":{\"slug\":\"privacy-policy\",\"title\":\"Privacy Policy\"}}"
+          }
+        },
+        {
+          "name": "Get Terms and Conditions",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/content/terms-and-conditions",
+            "description": "Public CMS page. Sample success: {\"success\":true,\"data\":{\"slug\":\"terms-and-conditions\",\"title\":\"Terms and Conditions\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "KYC",
+      "item": [
+        {
+          "name": "Start KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"passport\"\n}"
+            },
+            "url": "{{base_url}}/kyc/start",
+            "description": "Start draft KYC flow. Sample success: {\"success\":true,\"data\":{\"id\":12,\"status\":\"draft\",\"currentStep\":\"personal_info\"}}"
+          }
+        },
+        {
+          "name": "Get My KYC",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/kyc/me",
+            "description": "Fetch active KYC application. Sample success: {\"success\":true,\"data\":{\"kycApplication\":{},\"documents\":[]}}"
+          }
+        },
+        {
+          "name": "Save KYC Personal Info",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"John Carter\",\n  \"dob\": \"1994-08-15\",\n  \"addressLine1\": \"10 Main Street\",\n  \"city\": \"Dallas\",\n  \"state\": \"TX\",\n  \"postalCode\": \"75001\",\n  \"country\": \"USA\"\n}"
+            },
+            "url": "{{base_url}}/kyc/personal-info",
+            "description": "Step 1 in identity verification. Sample success: {\"success\":true,\"data\":{\"currentStep\":\"document\"}}"
+          }
+        },
+        {
+          "name": "Save KYC Document Info",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"passport\",\n  \"issuingCountry\": \"USA\",\n  \"documentNumber\": \"P123456789\"\n}"
+            },
+            "url": "{{base_url}}/kyc/document",
+            "description": "Store document metadata. Sample success: {\"success\":true,\"data\":{\"documentType\":\"passport\"}}"
+          }
+        },
+        {
+          "name": "Upload KYC Front Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentSide\": \"front\",\n  \"fileUrl\": \"https://cdn.example.com/kyc/front.jpg\",\n  \"mimeType\": \"image/jpeg\"\n}"
+            },
+            "url": "{{base_url}}/kyc/documents",
+            "description": "Upload front side of ID. Sample success: {\"success\":true,\"data\":{\"documentSide\":\"front\"}}"
+          }
+        },
+        {
+          "name": "Upload KYC Back Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentSide\": \"back\",\n  \"fileUrl\": \"https://cdn.example.com/kyc/back.jpg\",\n  \"mimeType\": \"image/jpeg\"\n}"
+            },
+            "url": "{{base_url}}/kyc/documents",
+            "description": "Upload back side of ID when required. Sample success: {\"success\":true,\"data\":{\"documentSide\":\"back\"}}"
+          }
+        },
+        {
+          "name": "Upload KYC Selfie",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileUrl\": \"https://cdn.example.com/kyc/selfie.jpg\",\n  \"providerRef\": \"stripe_identity_session_123\",\n  \"livenessResult\": \"pass\"\n}"
+            },
+            "url": "{{base_url}}/kyc/selfie",
+            "description": "Face verification step. Sample success: {\"success\":true,\"data\":{\"currentStep\":\"review\"}}"
+          }
+        },
+        {
+          "name": "Submit KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/kyc/submit",
+            "description": "Submit KYC for admin review. Sample success: {\"success\":true,\"data\":{\"status\":\"pending\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Groups",
+      "item": [
+        {
+          "name": "List My Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/groups?page=1&limit=10&status=active&search=",
+            "description": "Groups screen list. Sample success: {\"success\":true,\"data\":[{\"id\":5,\"name\":\"Family Savings 2026\"}],\"meta\":{\"page\":1}}"
+          }
+        },
+        {
+          "name": "Create Savings Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Family Savings 2026\",\n  \"description\": \"Monthly group savings\",\n  \"contributionAmount\": 100.00,\n  \"frequency\": \"monthly\",\n  \"maxMembers\": 10,\n  \"startDate\": \"2026-06-01\"\n}"
+            },
+            "url": "{{base_url}}/groups",
+            "description": "Create a new savings group. Sample success: {\"success\":true,\"data\":{\"group\":{\"id\":5},\"inviteCode\":\"SAVE2026\"}}"
+          }
+        },
+        {
+          "name": "Join Group By Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inviteCode\": \"SAVE2026\"\n}"
+            },
+            "url": "{{base_url}}/groups/join-by-code",
+            "description": "Enter code screen action. Sample success: {\"success\":true,\"data\":{\"joinRequest\":{\"status\":\"pending\"}}}"
+          }
+        },
+        {
+          "name": "List Group Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/groups/requests?type=incoming&page=1&limit=10&status=pending",
+            "description": "Requests screen for incoming or outgoing requests. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+          }
+        },
+        {
+          "name": "Approve Group Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Approved by owner\"\n}"
+            },
+            "url": "{{base_url}}/groups/requests/{{group_request_id}}/approve",
+            "description": "Approve join request. Sample success: {\"success\":true,\"data\":{\"membership\":{\"status\":\"active\"}}}"
+          }
+        },
+        {
+          "name": "Reject Group Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Group is full\"\n}"
+            },
+            "url": "{{base_url}}/groups/requests/{{group_request_id}}/reject",
+            "description": "Reject join request. Sample success: {\"success\":true,\"data\":{\"status\":\"rejected\"}}"
+          }
+        },
+        {
+          "name": "Get Group Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/groups/{{group_id}}",
+            "description": "Group details screen. Sample success: {\"success\":true,\"data\":{\"group\":{},\"membership\":{},\"summary\":{}}}"
+          }
+        },
+        {
+          "name": "Get Group Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/groups/{{group_id}}/members?page=1&limit=20",
+            "description": "Members tab for a group. Sample success: {\"success\":true,\"data\":[{\"userId\":12,\"membershipRole\":\"member\"}]}"
+          }
+        },
+        {
+          "name": "Get Group Wheel",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/groups/{{group_id}}/wheel",
+            "description": "Wheel screen rotation order. Sample success: {\"success\":true,\"data\":{\"cycle\":{},\"rotations\":[]}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallet and Payments",
+      "item": [
+        {
+          "name": "Get Wallet Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/wallet",
+            "description": "Wallet screen. Sample success: {\"success\":true,\"data\":{\"availableBalance\":350.00,\"pendingBalance\":25.00}}"
+          }
+        },
+        {
+          "name": "Get Wallet Ledger",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/wallet/ledger?page=1&limit=20&type=&direction=",
+            "description": "Wallet transaction history feed. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+          }
+        },
+        {
+          "name": "List Payment Methods",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/payment-methods",
+            "description": "Payment methods screen list. Sample success: {\"success\":true,\"data\":[{\"id\":3,\"last4\":\"4242\",\"isDefault\":true}]}"
+          }
+        },
+        {
+          "name": "Add Payment Method",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"stripe\",\n  \"type\": \"card\",\n  \"tokenRef\": \"pm_123456789\",\n  \"last4\": \"4242\",\n  \"brand\": \"visa\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"isDefault\": true\n}"
+            },
+            "url": "{{base_url}}/payment-methods",
+            "description": "Save card or bank account token. Sample success: {\"success\":true,\"data\":{\"id\":3,\"isDefault\":true}}"
+          }
+        },
+        {
+          "name": "Set Default Payment Method",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/payment-methods/{{payment_method_id}}/default",
+            "description": "Set default funding source. Sample success: {\"success\":true,\"data\":{\"id\":3,\"isDefault\":true}}"
+          }
+        },
+        {
+          "name": "Delete Payment Method",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/payment-methods/{{payment_method_id}}",
+            "description": "Remove saved payment method. Sample success: {\"success\":true,\"message\":\"Payment method removed\"}"
+          }
+        },
+        {
+          "name": "Wallet Top Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 150.00,\n  \"paymentMethodId\": \"{{payment_method_id}}\"\n}"
+            },
+            "url": "{{base_url}}/payments/wallet-topup",
+            "description": "Top up user wallet. Sample success: {\"success\":true,\"data\":{\"paymentTransaction\":{\"paymentStatus\":\"succeeded\"}}}"
+          }
+        },
+        {
+          "name": "Pay Group Contribution",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupId\": \"{{group_id}}\",\n  \"cycleId\": \"{{group_cycle_id}}\",\n  \"amount\": 100.00,\n  \"paymentMethodId\": \"{{payment_method_id}}\"\n}"
+            },
+            "url": "{{base_url}}/payments/group-contribution",
+            "description": "Group contribution payment. Sample success: {\"success\":true,\"data\":{\"paymentTransaction\":{\"transactionType\":\"group_contribution\"}}}"
+          }
+        },
+        {
+          "name": "List My Transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/payments?page=1&limit=20&status=&type=",
+            "description": "Transactions History screen. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"page\":1}}"
+          }
+        },
+        {
+          "name": "Get Transaction Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/payments/{{payment_id}}",
+            "description": "Single transaction detail. Sample success: {\"success\":true,\"data\":{\"id\":9,\"amount\":100.00}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/notifications?page=1&limit=20&unreadOnly=false",
+            "description": "Notifications screen list. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+          }
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/notifications/{{notification_id}}/read",
+            "description": "Mark one notification as read. Sample success: {\"success\":true,\"data\":{\"readAt\":\"2026-04-30T00:00:00Z\"}}"
+          }
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/notifications/read-all",
+            "description": "Bulk mark notifications read. Sample success: {\"success\":true,\"data\":{\"updatedCount\":14}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Support",
+      "item": [
+        {
+          "name": "Create Support Ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupId\": \"{{group_id}}\",\n  \"category\": \"payment_transaction\",\n  \"subject\": \"Contribution not showing\",\n  \"message\": \"I paid but my contribution is still pending.\"\n}"
+            },
+            "url": "{{base_url}}/support/tickets",
+            "description": "Contact Admin screen submission. Sample success: {\"success\":true,\"data\":{\"id\":15,\"status\":\"open\"}}"
+          }
+        },
+        {
+          "name": "List My Support Tickets",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/support/tickets?page=1&limit=10&status=open",
+            "description": "Member issue history. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+          }
+        },
+        {
+          "name": "Get Support Ticket",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/support/tickets/{{ticket_id}}",
+            "description": "Fetch ticket details and thread. Sample success: {\"success\":true,\"data\":{\"ticket\":{},\"messages\":[]}}"
+          }
+        },
+        {
+          "name": "Reply to Support Ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Adding more context about the payment issue.\",\n  \"attachmentUrl\": \"\"\n}"
+            },
+            "url": "{{base_url}}/support/tickets/{{ticket_id}}/messages",
+            "description": "Append a message to a ticket. Sample success: {\"success\":true,\"data\":{\"id\":44,\"senderRole\":\"member\"}}"
+          }
+        },
+        {
+          "name": "Close Support Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolutionNote\": \"Issue solved\"\n}"
+            },
+            "url": "{{base_url}}/support/tickets/{{ticket_id}}/close",
+            "description": "Close an issue from the client side. Sample success: {\"success\":true,\"data\":{\"status\":\"closed\"}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard",
+          "item": [
+            {
+              "name": "Get Dashboard Stats",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/dashboard/stats?range=30d",
+                "description": "Admin overview cards and charts. Sample success: {\"success\":true,\"data\":{\"totalUsers\":1284,\"activeGroups\":87,\"totalTransactions\":94200}}"
+              }
+            },
+            {
+              "name": "Get Dashboard Activity",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/dashboard/activity?page=1&limit=10&type=",
+                "description": "Recent activity table. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            },
+            {
+              "name": "Export Dashboard Report",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/reports/overview?range=30d&format=pdf",
+                "description": "Export stats report from dashboard. Sample success: {\"success\":true,\"data\":{\"fileUrl\":\"https://cdn.example.com/report.pdf\"}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/users?page=1&limit=10&search=&role=&status=",
+                "description": "User Management table. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            },
+            {
+              "name": "Get User Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/users/{{user_id}}",
+                "description": "Client Details screen payload. Sample success: {\"success\":true,\"data\":{\"user\":{},\"groups\":[],\"kyc\":{},\"recentTransactions\":[]}}"
+              }
+            },
+            {
+              "name": "Update User",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Updated User\",\n  \"phone\": \"+1-555-0199\",\n  \"role\": \"member\",\n  \"status\": \"active\"\n}"
+                },
+                "url": "{{base_url}}/admin/users/{{user_id}}",
+                "description": "Edit user from admin. Sample success: {\"success\":true,\"data\":{\"id\":12,\"name\":\"Updated User\"}}"
+              }
+            },
+            {
+              "name": "Block or Unblock User",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"blocked\": true\n}"
+                },
+                "url": "{{base_url}}/admin/users/{{user_id}}/block",
+                "description": "Toggle blocked state. Sample success: {\"success\":true,\"data\":{\"id\":12,\"status\":\"blocked\"}}"
+              }
+            },
+            {
+              "name": "Delete User",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/users/{{user_id}}",
+                "description": "Delete user record. Sample success: {\"success\":true,\"message\":\"User deleted\"}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Groups",
+          "item": [
+            {
+              "name": "List Groups",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/groups?page=1&limit=10&search=&status=",
+                "description": "Group Management table. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            },
+            {
+              "name": "Get Group Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/groups/{{group_id}}",
+                "description": "Admin group detail page. Sample success: {\"success\":true,\"data\":{\"group\":{},\"members\":[],\"wheel\":[],\"requests\":[]}}"
+              }
+            },
+            {
+              "name": "Update Group Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"closed\"\n}"
+                },
+                "url": "{{base_url}}/admin/groups/{{group_id}}/status",
+                "description": "Suspend or close a group. Sample success: {\"success\":true,\"data\":{\"id\":5,\"status\":\"closed\"}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "KYC",
+          "item": [
+            {
+              "name": "List KYC Applications",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/kyc?page=1&limit=10&status=pending&search=",
+                "description": "Admin KYC list. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            },
+            {
+              "name": "Get KYC Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/kyc/{{kyc_id}}",
+                "description": "Fetch one KYC application and documents. Sample success: {\"success\":true,\"data\":{\"kycApplication\":{},\"documents\":[]}}"
+              }
+            },
+            {
+              "name": "Approve KYC",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"note\": \"Verified successfully\"\n}"
+                },
+                "url": "{{base_url}}/admin/kyc/{{kyc_id}}/approve",
+                "description": "Approve pending KYC. Sample success: {\"success\":true,\"data\":{\"status\":\"approved\"}}"
+              }
+            },
+            {
+              "name": "Reject KYC",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Document is blurry\"\n}"
+                },
+                "url": "{{base_url}}/admin/kyc/{{kyc_id}}/reject",
+                "description": "Reject KYC with reason. Sample success: {\"success\":true,\"data\":{\"status\":\"rejected\"}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transactions",
+          "item": [
+            {
+              "name": "List Transactions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/transactions?page=1&limit=10&status=&type=&groupId=&userId=",
+                "description": "Transaction Management table. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            },
+            {
+              "name": "Get Transaction Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/transactions/{{payment_id}}",
+                "description": "Get single transaction record. Sample success: {\"success\":true,\"data\":{\"paymentTransaction\":{},\"walletEntries\":[]}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issues",
+          "item": [
+            {
+              "name": "List Support Issues",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/issues?page=1&limit=10&status=&category=&priority=&search=",
+                "description": "Issues Management table. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            },
+            {
+              "name": "Get Support Issue",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/support/tickets/{{ticket_id}}",
+                "description": "Open issue detail with conversation. Sample success: {\"success\":true,\"data\":{\"ticket\":{},\"messages\":[]}}"
+              }
+            },
+            {
+              "name": "Assign Support Issue",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assignedAdminId\": \"{{user_id}}\"\n}"
+                },
+                "url": "{{base_url}}/admin/issues/{{ticket_id}}/assign",
+                "description": "Assign issue to an admin. Sample success: {\"success\":true,\"data\":{\"assignedAdminId\":99}}"
+              }
+            },
+            {
+              "name": "Update Support Issue Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"resolved\",\n  \"priority\": \"high\",\n  \"resolutionNote\": \"Transaction manually reconciled\"\n}"
+                },
+                "url": "{{base_url}}/admin/issues/{{ticket_id}}/status",
+                "description": "Resolve or reprioritize a ticket. Sample success: {\"success\":true,\"data\":{\"status\":\"resolved\"}}"
+              }
+            },
+            {
+              "name": "Reply to Support Issue",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"We have reviewed the issue and fixed it.\",\n  \"attachmentUrl\": \"\"\n}"
+                },
+                "url": "{{base_url}}/support/tickets/{{ticket_id}}/messages",
+                "description": "Admin reply inside ticket thread. Sample success: {\"success\":true,\"data\":{\"senderRole\":\"admin\"}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notifications",
+          "item": [
+            {
+              "name": "Send Notification",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Maintenance Notice\",\n  \"content\": \"Scheduled maintenance tonight at 11 PM\",\n  \"scope\": \"broadcast\",\n  \"userIds\": []\n}"
+                },
+                "url": "{{base_url}}/admin/notifications",
+                "description": "Create a broadcast or user-targeted notification. Sample success: {\"success\":true,\"data\":{\"id\":77,\"scope\":\"broadcast\"}}"
+              }
+            },
+            {
+              "name": "List Sent Notifications",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/notifications?page=1&limit=10&scope=",
+                "description": "Admin notifications history. Sample success: {\"success\":true,\"data\":[],\"meta\":{\"total\":0}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Settings",
+          "item": [
+            {
+              "name": "Get Platform Settings",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": "{{base_url}}/admin/settings",
+                "description": "Admin settings page. Sample success: {\"success\":true,\"data\":{\"supportEmail\":\"support@example.com\",\"maintenanceMode\":false}}"
+              }
+            },
+            {
+              "name": "Update Platform Settings",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"supportEmail\": \"support@example.com\",\n  \"maintenanceMode\": false,\n  \"defaultCurrency\": \"USD\"\n}"
+                },
+                "url": "{{base_url}}/admin/settings",
+                "description": "Update global settings. Sample success: {\"success\":true,\"data\":{\"defaultCurrency\":\"USD\"}}"
+              }
+            },
+            {
+              "name": "Update CMS Page",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Privacy Policy\",\n  \"content\": \"<p>Updated content</p>\",\n  \"isPublished\": true\n}"
+                },
+                "url": "{{base_url}}/admin/content/privacy-policy",
+                "description": "Update privacy or terms content. Sample success: {\"success\":true,\"data\":{\"slug\":\"privacy-policy\",\"isPublished\":true}}"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
