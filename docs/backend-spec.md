@@ -87,13 +87,13 @@
 
 ### Auth
 - `POST /api/v1/auth/login`
-  - Body: `{ "email": "admin@gmail.com", "password": "123456" }`
+  - Body: `{ "email": "admin@gmail.com", "password": "" }`
   - Response: access token, refresh token, role, user
 - `POST /api/v1/auth/forgot-password`
   - Body: `{ "email": "admin@gmail.com" }`
   - Response: OTP dispatch confirmation
 - `POST /api/v1/auth/reset-password`
-  - Body: `{ "email": "admin@gmail.com", "otp": "123456", "password": "NewPassword123!" }`
+  - Body: `{ "email": "", "otp": "", "password": "" }`
   - Response: success message
 - `POST /api/v1/auth/refresh-token`
   - Body or cookie: refresh token
