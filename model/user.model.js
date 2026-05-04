@@ -3,14 +3,6 @@ import bcrypt from "bcryptjs";
 
 const userSchema = new Schema(
   {
-    firstName: {
-      type: String,
-      trim: true,
-    },
-    lastName: {
-      type: String,
-      trim: true,
-    },
     name: { type: String },
     email: {
       type: String,
@@ -26,80 +18,6 @@ const userSchema = new Schema(
       trim: true,
     },
     bio: { type: String, maxlength: 500 },
-    gender: {
-      type: String,
-      enum: [
-        "male",
-        "female",
-        "non-binary",
-        "trans man",
-        "trans woman",
-        "other",
-        "prefer not to say",
-      ],
-    },
-    selfDescription: { type: String, maxlength: 1000 },
-    dob: {
-      type: Date,
-    },
-    height: {
-      type: String,
-    },
-    sexualOrientation: {
-      type: String,
-      enum: ["man", "woman", "prefer not to say"],
-    },
-    personalityType: {
-      type: String,
-      enum: [
-        "INTJ",
-        "INTP",
-        "INFJ",
-        "INFP",
-        "ISTJ",
-        "ISTP",
-        "ISFJ",
-        "ISFP",
-        "ENTJ",
-        "ENTP",
-        "ENFJ",
-        "ENFP",
-        "ESTJ",
-        "ESTP",
-        "ESFJ",
-        "ESFP",
-      ],
-    },
-    religion: {
-      type: String,
-      enum: [
-        "agnostic",
-        "atheist",
-        "buddhist",
-        "catholic",
-        "christian",
-        "hindu",
-        "jewish",
-        "muslim",
-        "spiritual",
-        "prefer not to say",
-      ],
-    },
-    lookingFor: [
-      {
-        type: String,
-        enum: [
-          "something casual",
-          "friends",
-          "friends with benefits",
-          "one night stand",
-          "long term dating",
-          "short term dating",
-          "i don't know yet",
-          "vibe",
-        ],
-      },
-    ],
     interests: [
       {
         type: String,
@@ -110,12 +28,6 @@ const userSchema = new Schema(
       public_id: { type: String, default: "" },
       url: { type: String, default: "" },
     },
-    profilePhotos: [
-      {
-        public_id: { type: String, required: true },
-        url: { type: String, required: true },
-      },
-    ],
     location: { type: String },
     addresses: {
       type: Array,
@@ -125,51 +37,21 @@ const userSchema = new Schema(
       type: Boolean,
       default: true,
     },
-    language: {
-      type: String,
-      default: "en",
-    },
-    country: {
-      type: String,
-      default: "Kuwait",
-    },
     referralCode: {
       type: String,
       default: () => Math.random().toString(36).substr(2, 9).toUpperCase(),
     },
     role: {
       type: String,
-      enum: ["user", "admin", "storeman"],
+      enum: ["user", "admin"],
       default: "user",
-    },
-    isBlocked: {
-      type: Boolean,
-      default: false,
     },
     verificationInfo: {
       verified: { type: Boolean, default: false },
       token: { type: String, default: "" },
     },
     password_reset_token: { type: String, default: "" },
-    fine: { type: Number, default: 0 },
     refreshToken: { type: String, default: "" },
-    review: [
-      {
-        rating: {
-          type: Number,
-          min: [0, "Rating cannot be negative"],
-          max: [5, "Rating cannot exceed 5"],
-          default: 0,
-        },
-        product: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-        },
-        text: {
-          type: String,
-        },
-      },
-    ],
   },
   { timestamps: true }
 );
