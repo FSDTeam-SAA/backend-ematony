@@ -102,7 +102,7 @@ export const recordMonthlyContribution = catchAsync(async (req, res) => {
   if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
     throw new AppError(httpStatus.BAD_REQUEST, "Valid groupId is required");
   }
-  if (req.user.kycStatus !== "verified" && req.user.role !== "admin") {
+  if (req.kycStatus !== "approved" && req.user.role !== "admin") {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "KYC verification is required to make payments"
@@ -212,7 +212,7 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
   if (!value || value <= 0) {
     throw new AppError(httpStatus.BAD_REQUEST, "Valid amount is required");
   }
-  if (req.user.kycStatus !== "verified" && req.user.role !== "admin") {
+  if (req.kycStatus !== "approved" && req.user.role !== "admin") {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "KYC verification is required to withdraw"

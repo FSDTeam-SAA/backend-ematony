@@ -307,8 +307,6 @@ export const approveKyc = catchAsync(async (req, res) => {
   kyc.reviewedAt = new Date();
   await kyc.save();
 
-  await User.findByIdAndUpdate(kyc.userId, { kycStatus: "verified" });
-
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -339,8 +337,6 @@ export const rejectKyc = catchAsync(async (req, res) => {
   kyc.reviewedBy = req.user._id;
   kyc.reviewedAt = new Date();
   await kyc.save();
-
-  await User.findByIdAndUpdate(kyc.userId, { kycStatus: "rejected" });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -412,12 +408,6 @@ export const getStripeVerificationSessionStatus = catchAsync(async (req, res) =>
 
   Object.assign(kyc, mapStripeSessionToKycState(session));
   await kyc.save();
-
-  if (kyc.status === "approved") {
-    await User.findByIdAndUpdate(kyc.userId, { kycStatus: "verified" });
-  } else if (kyc.status === "rejected") {
-    await User.findByIdAndUpdate(kyc.userId, { kycStatus: "rejected" });
-  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
