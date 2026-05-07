@@ -3,12 +3,18 @@ import mongoose from "mongoose";
 import AppError from "../errors/AppError.js";
 import { GroupJoinRequest } from "../model/groupJoinRequest.model.js";
 import { GroupMembership } from "../model/groupMembership.model.js";
+import { GroupWinner } from "../model/groupWinner.model.js";
 import { SavingsGroup } from "../model/group.model.js";
 import { Payment } from "../model/payment.model.js";
 import catchAsync from "../utils/catchAsync.js";
 import { generateUniqueId } from "../utils/commonMethod.js";
 import { buildMeta, parsePagination } from "../utils/pagination.js";
 import sendResponse from "../utils/sendResponse.js";
+import {
+  createNotification,
+  NotificationTemplates,
+} from "../services/notification.service.js";
+import { User } from "../model/user.model.js";
 
 const groupProjection =
   "name description inviteCode status contributionAmount currencyCode contributionFrequency maxMembers startDate endDate ownerUserId createdAt updatedAt";
@@ -117,8 +123,30 @@ export const createGroup = catchAsync(async (req, res) => {
   if (!resolvedFrequency) {
     throw new AppError(httpStatus.BAD_REQUEST, "Contribution frequency is required");
   }
-  if (!maxMembers || Number(maxMembers) < 2) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Group must allow at least 2 members");
+  if (!maxMembers || Number(maxMembers) < 3 || Number(maxMembers) > 36) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Group must allow between 3 and 36 members"
+    );
+  }
+
+  if (req.user.kycStatus !== "verified" && req.user.role !== "admin") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "KYC verification is required to create a group"
+    );
+  }
+
+  const ownedCount = await GroupMembership.countDocuments({
+    userId: req.user._id,
+    membershipRole: "owner",
+    status: { $in: ["active", "pending"] },
+  });
+  if (ownedCount >= 2) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "You can create a maximum of 2 groups"
+    );
   }
 
   const inviteCode = generateUniqueId();
@@ -131,7 +159,7 @@ export const createGroup = catchAsync(async (req, res) => {
     contributionFrequency: resolvedFrequency,
     maxMembers: Number(maxMembers),
     startDate: startDate || null,
-    currencyCode: currencyCode || "USD",
+    currencyCode: currencyCode || "NGN",
     status: "active",
   });
 
@@ -166,6 +194,24 @@ export const joinGroupByCode = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "Group not found");
   }
 
+  if (req.user.kycStatus !== "verified" && req.user.role !== "admin") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "KYC verification is required to join a group"
+    );
+  }
+
+  const joinedCount = await GroupMembership.countDocuments({
+    userId: req.user._id,
+    status: { $in: ["active", "pending"] },
+  });
+  if (joinedCount >= 2) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "You can join a maximum of 2 groups"
+    );
+  }
+
   const existingMembership = await GroupMembership.findOne({
     groupId: group._id,
     userId: req.user._id,
@@ -188,7 +234,7 @@ export const joinGroupByCode = catchAsync(async (req, res) => {
     groupId: group._id,
     status: "active",
   });
-  if (activeMemberCount >= group.maxMembers) {
+  if (activeMemberCount >= Math.min(group.maxMembers, 36)) {
     throw new AppError(httpStatus.CONFLICT, "Group is already full");
   }
 
@@ -276,8 +322,19 @@ export const approveGroupRequest = catchAsync(async (req, res) => {
     groupId: group._id,
     status: "active",
   });
-  if (activeMemberCount >= group.maxMembers) {
+  if (activeMemberCount >= Math.min(group.maxMembers, 36)) {
     throw new AppError(httpStatus.CONFLICT, "Group is already full");
+  }
+
+  const requesterActiveCount = await GroupMembership.countDocuments({
+    userId: joinRequest.userId,
+    status: "active",
+  });
+  if (requesterActiveCount >= 2) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "User has already joined the maximum of 2 groups"
+    );
   }
 
   const membership = await GroupMembership.findOneAndUpdate(
@@ -298,6 +355,35 @@ export const approveGroupRequest = catchAsync(async (req, res) => {
   joinRequest.reviewedAt = new Date();
   joinRequest.rejectionReason = "";
   await joinRequest.save();
+
+  // Notifications: notify the joiner and the group owner
+  try {
+    const joiner = await User.findById(joinRequest.userId).select("name");
+    const tplJoiner = NotificationTemplates.groupJoinedSelf({
+      groupName: group.name,
+    });
+    await createNotification({
+      userId: joinRequest.userId,
+      groupId: group._id,
+      relatedUserId: group.ownerUserId,
+      ...tplJoiner,
+    });
+
+    if (String(group.ownerUserId) !== String(joinRequest.userId)) {
+      const tplOwner = NotificationTemplates.groupJoinedOwner({
+        groupName: group.name,
+        memberName: joiner?.name || "",
+      });
+      await createNotification({
+        userId: group.ownerUserId,
+        groupId: group._id,
+        relatedUserId: joinRequest.userId,
+        ...tplOwner,
+      });
+    }
+  } catch (err) {
+    console.error("Group join notification failed:", err?.message || err);
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -437,6 +523,30 @@ export const getGroupWheel = catchAsync(async (req, res) => {
 
   const wheel = await buildWheelData(id);
 
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const day = now.getDate();
+
+  const currentWinner = await GroupWinner.findOne({
+    groupId: id,
+    month,
+    year,
+  }).populate("userId", "name email phone avatar");
+
+  const recentWinners = await GroupWinner.find({ groupId: id })
+    .sort({ spunAt: -1 })
+    .limit(12)
+    .populate("userId", "name email phone avatar");
+
+  const isOwner = String(group.ownerUserId) === String(req.user._id);
+  const canSpin =
+    isOwner &&
+    day >= 25 &&
+    day <= 30 &&
+    !currentWinner &&
+    wheel.totalMembers >= 3;
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -444,6 +554,168 @@ export const getGroupWheel = catchAsync(async (req, res) => {
     data: {
       group,
       ...wheel,
+      currentMonthWinner: currentWinner,
+      recentWinners,
+      canSpin,
+      isOwner,
+      spinWindow: { startDay: 25, endDay: 30, today: day },
+    },
+  });
+});
+
+export const spinGroupWheel = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  if (!isValidObjectId(id)) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid group id");
+  }
+
+  const group = await SavingsGroup.findById(id);
+  if (!group) {
+    throw new AppError(httpStatus.NOT_FOUND, "Group not found");
+  }
+
+  // Only the group creator can spin
+  if (String(group.ownerUserId) !== String(req.user._id) && req.user.role !== "admin") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "Only the group creator can spin the wheel"
+    );
+  }
+
+  const now = new Date();
+  const day = now.getDate();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  // Spin only allowed between day 25 and day 30
+  if (day < 25 || day > 30) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "The wheel can only be spun between day 25 and day 30 of the month"
+    );
+  }
+
+  // Only once per month
+  const existingWinner = await GroupWinner.findOne({
+    groupId: id,
+    month,
+    year,
+  });
+  if (existingWinner) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "The wheel has already been spun for this month"
+    );
+  }
+
+  const memberships = await GroupMembership.find({
+    groupId: id,
+    status: "active",
+  }).populate("userId", "name email phone avatar");
+
+  if (memberships.length < 3) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Group must have at least 3 active members to spin"
+    );
+  }
+
+  // Eligible: paid by 25th of this month (paymentStatus complete/succeeded)
+  const monthStart = new Date(year, month - 1, 1);
+  const cutoff = new Date(year, month - 1, 25, 23, 59, 59, 999);
+  const paidPayments = await Payment.find({
+    groupId: id,
+    type: "group_contribution",
+    paymentStatus: { $in: ["complete", "succeeded"] },
+    createdAt: { $gte: monthStart, $lte: cutoff },
+  }).select("userId");
+  const paidUserIds = new Set(paidPayments.map((p) => String(p.userId)));
+
+  // Determine current cycle: count winners in latest cycle for this group
+  const allWinners = await GroupWinner.find({ groupId: id }).sort({
+    cycleNumber: 1,
+    spunAt: 1,
+  });
+  let cycleNumber = 1;
+  if (allWinners.length > 0) {
+    cycleNumber = allWinners[allWinners.length - 1].cycleNumber;
+    const winnersInCycle = allWinners.filter(
+      (w) => w.cycleNumber === cycleNumber
+    );
+    if (winnersInCycle.length >= memberships.length) {
+      cycleNumber += 1;
+    }
+  }
+  const previousWinnerIdsThisCycle = new Set(
+    allWinners
+      .filter((w) => w.cycleNumber === cycleNumber)
+      .map((w) => String(w.userId))
+  );
+
+  const eligible = memberships.filter((m) => {
+    const uid = String(m.userId._id || m.userId);
+    return paidUserIds.has(uid) && !previousWinnerIdsThisCycle.has(uid);
+  });
+
+  if (eligible.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "No eligible members. Members must pay by the 25th and not have already won this cycle."
+    );
+  }
+
+  const pick = eligible[Math.floor(Math.random() * eligible.length)];
+  const winnerUserId = pick.userId._id || pick.userId;
+
+  const winningAmount = group.contributionAmount * memberships.length;
+
+  const winner = await GroupWinner.create({
+    groupId: id,
+    userId: winnerUserId,
+    month,
+    year,
+    cycleNumber,
+    amount: winningAmount,
+    spunBy: req.user._id,
+  });
+
+  // Credit wallet via payout payment
+  await Payment.create({
+    userId: winnerUserId,
+    groupId: id,
+    price: winningAmount,
+    paymentStatus: "complete",
+    type: "payout",
+    referenceCode: `WIN-${year}${String(month).padStart(2, "0")}-${String(
+      winner._id
+    ).slice(-6)}`,
+  });
+
+  // Notify the winner
+  try {
+    const tpl = NotificationTemplates.wheelWinner({
+      amount: winningAmount,
+      groupName: group.name,
+    });
+    await createNotification({
+      userId: winnerUserId,
+      groupId: id,
+      amount: winningAmount,
+      ...tpl,
+    });
+  } catch (err) {
+    console.error("Wheel winner notification failed:", err?.message || err);
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Wheel spun successfully",
+    data: {
+      winner,
+      winnerUser: pick.userId,
+      cycleNumber,
+      amount: winningAmount,
     },
   });
 });
