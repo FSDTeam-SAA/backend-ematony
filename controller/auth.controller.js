@@ -6,6 +6,7 @@ import httpStatus from "http-status";
 import sendResponse from "../utils/sendResponse.js";
 import { sendEmail } from "../utils/sendEmail.js";
 import { User } from "./../model/user.model.js";
+import { KycVerification } from "../model/kyc.model.js";
 
 const sanitizeUser = (user) => {
   const userObj = user?.toObject ? user.toObject() : { ...user };
@@ -21,11 +22,15 @@ export const getCurrentUser = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
+  const sanitized = sanitizeUser(user);
+  sanitized.kycStatus = req.kycStatus || "draft";
+  sanitized.kycVerified = req.kycStatus === "approved";
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Current user fetched successfully",
-    data: sanitizeUser(user),
+    data: sanitized,
   });
 });
 
@@ -103,11 +108,16 @@ export const login = catchAsync(async (req, res) => {
   ) {
     throw new AppError(httpStatus.FORBIDDEN, "Password is not correct");
   }
-  if (user.kycStatus !== "verified" && user.role !== "admin") {
-    throw new AppError(
-      httpStatus.FORBIDDEN,
-      "KYC verification is required before signing in."
-    );
+  if (user.role !== "admin") {
+    const kycRecord = await KycVerification.findOne({ userId: user._id }).sort({
+      createdAt: -1,
+    });
+    if (!kycRecord || kycRecord.status !== "approved") {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "KYC verification is required before signing in."
+      );
+    }
   }
   if (!(await User.isOTPVerified(user._id))) {
     const otp = generateOTP();
@@ -158,6 +168,10 @@ export const login = catchAsync(async (req, res) => {
     maxAge: 1000 * 60 * 60 * 24 * 365,
   });
 
+  const sanitized = sanitizeUser(user);
+  sanitized.kycStatus = "approved";
+  sanitized.kycVerified = true;
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -167,7 +181,7 @@ export const login = catchAsync(async (req, res) => {
       refreshToken: refreshToken,
       role: user.role,
       _id: user._id,
-      user: sanitizeUser(user),
+      user: sanitized,
     },
   });
 });

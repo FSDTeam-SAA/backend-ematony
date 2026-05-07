@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import httpStatus from "http-status";
 import AppError from "../errors/AppError.js";
 import { User } from "./../model/user.model.js";
+import { KycVerification } from "../model/kyc.model.js";
 
 export const protect = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -20,6 +21,14 @@ export const protect = async (req, res, next) => {
       throw new AppError(httpStatus.FORBIDDEN, "User verification incomplete");
     }
 
+    // Attach KYC verification status from the KycVerification model
+    // (source of truth — do not read kyc state off the User document).
+    const kycRecord = await KycVerification.findOne({ userId: user._id })
+      .sort({ createdAt: -1 })
+      .select("status");
+    req.kycStatus = kycRecord?.status || "draft";
+    req.kycVerified = req.kycStatus === "approved";
+
     req.user = user;
     next();
   } catch (err) {
@@ -32,7 +41,7 @@ export const protect = async (req, res, next) => {
 
 export const requireKyc = (req, res, next) => {
   if (req.user?.role === "admin") return next();
-  if (req.user?.kycStatus !== "verified") {
+  if (req.kycStatus !== "approved") {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "KYC verification is required to perform this action."

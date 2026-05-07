@@ -46,12 +46,6 @@ const userSchema = new Schema(
       enum: ["user", "admin"],
       default: "user",
     },
-    kycStatus: {
-      type: String,
-      enum: ["pending", "verified", "rejected"],
-      default: "pending",
-      index: true,
-    },
     isBlocked: { type: Boolean, default: false },
     verificationInfo: {
       verified: { type: Boolean, default: false },

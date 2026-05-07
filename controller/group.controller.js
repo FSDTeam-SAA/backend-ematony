@@ -130,7 +130,7 @@ export const createGroup = catchAsync(async (req, res) => {
     );
   }
 
-  if (req.user.kycStatus !== "verified" && req.user.role !== "admin") {
+  if (req.kycStatus !== "approved" && req.user.role !== "admin") {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "KYC verification is required to create a group"
@@ -194,7 +194,7 @@ export const joinGroupByCode = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "Group not found");
   }
 
-  if (req.user.kycStatus !== "verified" && req.user.role !== "admin") {
+  if (req.kycStatus !== "approved" && req.user.role !== "admin") {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "KYC verification is required to join a group"
