@@ -97,14 +97,21 @@ export const sendNotification = catchAsync(async (req, res) => {
 export const getMyNotifications = catchAsync(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const unreadOnly = req.query.unreadOnly?.toString().trim() === "true";
+  const type = req.query.type?.toString().trim();
 
   const query = {
     $or: [{ userId: req.user._id }, { scope: "broadcast" }],
     ...(unreadOnly ? { isRead: false } : {}),
+    ...(type ? { type } : {}),
   };
 
   const [data, total] = await Promise.all([
-    Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Notification.find(query)
+      .populate("groupId", "name")
+      .populate("relatedUserId", "name avatar")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
     Notification.countDocuments(query),
   ]);
 
@@ -144,6 +151,19 @@ export const markMyNotificationRead = catchAsync(async (req, res) => {
     success: true,
     message: "Notification marked as read",
     data: mapNotification(notification),
+  });
+});
+
+export const getMyUnreadCount = catchAsync(async (req, res) => {
+  const count = await Notification.countDocuments({
+    $or: [{ userId: req.user._id }, { scope: "broadcast" }],
+    isRead: false,
+  });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Unread notification count fetched",
+    data: { count },
   });
 });
 

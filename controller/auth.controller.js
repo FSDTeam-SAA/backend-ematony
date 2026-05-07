@@ -103,6 +103,12 @@ export const login = catchAsync(async (req, res) => {
   ) {
     throw new AppError(httpStatus.FORBIDDEN, "Password is not correct");
   }
+  if (user.kycStatus !== "verified" && user.role !== "admin") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "KYC verification is required before signing in."
+    );
+  }
   if (!(await User.isOTPVerified(user._id))) {
     const otp = generateOTP();
     const jwtPayloadOTP = {

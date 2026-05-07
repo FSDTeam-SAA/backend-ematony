@@ -163,13 +163,15 @@ export const toggleBlockUser = catchAsync(async (req, res) => {
 });
 
 export const updateProfile = catchAsync(async (req, res) => {
-  const { name } = req.body;
+  const { name, phone, bio } = req.body;
 
   const user = await User.findById(req.user._id);
 
   if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 
   if (name) user.name = name;
+  if (typeof phone === "string") user.phone = phone.trim();
+  if (typeof bio === "string") user.bio = bio.trim();
 
   if (req.file) {
     const upload = await uploadOnCloudinary(req.file.buffer);

@@ -27,6 +27,43 @@ const notificationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    message: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    type: {
+      type: String,
+      enum: [
+        "payment_reminder",
+        "wheel_winner",
+        "top_up",
+        "withdrawal",
+        "group_join",
+        "general",
+      ],
+      default: "general",
+      index: true,
+    },
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SavingsGroup",
+      default: null,
+      index: true,
+    },
+    relatedUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    amount: {
+      type: Number,
+      default: null,
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     isRead: {
       type: Boolean,
       default: false,

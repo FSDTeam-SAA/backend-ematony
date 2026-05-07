@@ -9,6 +9,7 @@ import { Server } from "socket.io";
 
 import globalErrorHandler from "./middleware/globalErrorHandler.js";
 import notFound from "./middleware/notFound.js";
+import { startNotificationScheduler } from "./services/notification.scheduler.js";
 
 const app = express();
 
@@ -57,6 +58,13 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("joinNotifications", (userId) => {
+    if (userId) {
+      socket.join(`user_${userId}`);
+      console.log(`Client ${socket.id} joined notifications: ${userId}`);
+    }
+  });
+
   socket.on("joinAlerts", () => {
     socket.join("alerts");
     console.log(`Client ${socket.id} joined alerts room`);
@@ -74,6 +82,7 @@ server.listen(PORT, async () => {
   try {
     await mongoose.connect(process.env.MONGO_DB_URL);
     console.log("MongoDB connected");
+    startNotificationScheduler();
   } catch (err) {
     console.error("MongoDB connection error:", err);
     process.exit(1);

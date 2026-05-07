@@ -30,6 +30,17 @@ export const protect = async (req, res, next) => {
   }
 };
 
+export const requireKyc = (req, res, next) => {
+  if (req.user?.role === "admin") return next();
+  if (req.user?.kycStatus !== "verified") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "KYC verification is required to perform this action."
+    );
+  }
+  next();
+};
+
 export const isAdmin = (req, res, next) => {
   if (req.user?.role !== "admin") {
     throw new AppError(403, "Access denied. You are not an admin.");

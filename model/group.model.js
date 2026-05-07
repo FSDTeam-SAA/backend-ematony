@@ -38,7 +38,7 @@ const groupSchema = new mongoose.Schema(
     },
     currencyCode: {
       type: String,
-      default: "USD",
+      default: "NGN",
       trim: true,
     },
     contributionFrequency: {
