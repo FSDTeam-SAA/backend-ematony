@@ -12,11 +12,21 @@ const getStripeClient = () => {
   return stripe;
 };
 
-const getIdentityReturnUrl = () =>
-  process.env.STRIPE_IDENTITY_RETURN_URL ||
-  process.env.CLIENT_URL ||
-  process.env.ADMIN_APP_URL ||
-  "http://localhost:3000";
+const getIdentityReturnUrl = () => {
+  // Prefer the API-hosted return page so we control the bounce-into-app
+  // flow with a deep link. Fall back to legacy envs.
+  if (process.env.STRIPE_IDENTITY_RETURN_URL) {
+    return process.env.STRIPE_IDENTITY_RETURN_URL;
+  }
+  if (process.env.API_PUBLIC_URL) {
+    return `${process.env.API_PUBLIC_URL.replace(/\/$/, "")}/api/v1/kyc/stripe/return`;
+  }
+  return (
+    process.env.CLIENT_URL ||
+    process.env.ADMIN_APP_URL ||
+    "http://localhost:5000/api/v1/kyc/stripe/return"
+  );
+};
 
 export const createIdentityVerificationSession = async ({ user }) => {
   return getStripeClient().identity.verificationSessions.create({

@@ -10,6 +10,7 @@ import {
   saveKycDocumentInfo,
   saveKycPersonalInfo,
   startKyc,
+  stripeIdentityReturn,
   submitKyc,
   uploadKycSelfie,
 } from "../controller/kyc.controller.js";
@@ -26,6 +27,7 @@ router.post("/selfie", protect, uploadKycSelfie);
 router.post("/submit", protect, submitKyc);
 router.post("/stripe/verification-session", protect, createStripeVerificationSession);
 router.get("/stripe/verification-session/:sessionId", protect, getStripeVerificationSessionStatus);
+router.get("/stripe/return", stripeIdentityReturn);
 router.get("/all", protect, isAdmin, getKycList);
 router.patch("/:id/approve", protect, isAdmin, approveKyc);
 router.patch("/:id/reject", protect, isAdmin, rejectKyc);
