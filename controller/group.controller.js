@@ -82,7 +82,7 @@ export const listMyGroups = catchAsync(async (req, res) => {
     ...(search ? { name: { $regex: search, $options: "i" } } : {}),
   };
 
-  const [data, total] = await Promise.all([
+  const [groupsRaw, total] = await Promise.all([
     SavingsGroup.find(query)
       .select(groupProjection)
       .populate("ownerUserId", "name email phone")
@@ -91,6 +91,23 @@ export const listMyGroups = catchAsync(async (req, res) => {
       .limit(limit),
     SavingsGroup.countDocuments(query),
   ]);
+
+  const ids = groupsRaw.map((g) => g._id);
+  const memberCounts = ids.length
+    ? await GroupMembership.aggregate([
+        { $match: { groupId: { $in: ids }, status: "active" } },
+        { $group: { _id: "$groupId", count: { $sum: 1 } } },
+      ])
+    : [];
+  const countMap = new Map(
+    memberCounts.map((m) => [String(m._id), m.count])
+  );
+
+  const data = groupsRaw.map((g) => {
+    const obj = g.toObject();
+    obj.membersCount = countMap.get(String(g._id)) || 0;
+    return obj;
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -149,7 +166,7 @@ export const createGroup = catchAsync(async (req, res) => {
     );
   }
 
-  const inviteCode = generateUniqueId();
+  const inviteCode = generateUniqueId().toUpperCase();
   const group = await SavingsGroup.create({
     ownerUserId: req.user._id,
     name: name.trim(),
@@ -184,12 +201,16 @@ export const createGroup = catchAsync(async (req, res) => {
 });
 
 export const joinGroupByCode = catchAsync(async (req, res) => {
-  const inviteCode = req.body.inviteCode?.toString().trim().toUpperCase();
+  const inviteCode = req.body.inviteCode?.toString().trim();
   if (!inviteCode) {
     throw new AppError(httpStatus.BAD_REQUEST, "Invite code is required");
   }
 
-  const group = await SavingsGroup.findOne({ inviteCode });
+  // Case-insensitive exact match to tolerate codes generated before invite codes were normalised to uppercase.
+  const escaped = inviteCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const group = await SavingsGroup.findOne({
+    inviteCode: { $regex: `^${escaped}$`, $options: "i" },
+  });
   if (!group) {
     throw new AppError(httpStatus.NOT_FOUND, "Group not found");
   }
@@ -241,7 +262,7 @@ export const joinGroupByCode = catchAsync(async (req, res) => {
   const joinRequest = await GroupJoinRequest.create({
     groupId: group._id,
     userId: req.user._id,
-    inviteCode,
+    inviteCode: group.inviteCode,
     status: "pending",
   });
 
