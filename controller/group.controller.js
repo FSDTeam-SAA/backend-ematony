@@ -266,6 +266,30 @@ export const joinGroupByCode = catchAsync(async (req, res) => {
     status: "pending",
   });
 
+  // Notify the group owner in real time. createNotification emits a
+  // "notification:new" event to room `user_${ownerId}` via socket.io.
+  try {
+    if (group.ownerUserId && String(group.ownerUserId) !== String(req.user._id)) {
+      const requester = await User.findById(req.user._id).select("name");
+      const tpl = NotificationTemplates.groupJoinRequest({
+        groupName: group.name,
+        requesterName: requester?.name || "",
+      });
+      await createNotification({
+        userId: group.ownerUserId,
+        title: tpl.title,
+        message: tpl.message,
+        type: tpl.type,
+        groupId: group._id,
+        relatedUserId: req.user._id,
+        metadata: { joinRequestId: joinRequest._id, status: "pending" },
+      });
+    }
+  } catch (err) {
+    // Notification failure must not block the join request itself.
+    console.error("Join request notification failed:", err?.message || err);
+  }
+
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,

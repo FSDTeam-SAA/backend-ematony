@@ -122,4 +122,11 @@ export const NotificationTemplates = {
     }.`,
     type: "group_join",
   }),
+  groupJoinRequest: ({ groupName, requesterName }) => ({
+    title: "New join request",
+    message: `${requesterName ? `${requesterName} ` : "Someone "}requested to join your group${
+      groupName ? `: ${groupName}` : ""
+    }. Tap to review.`,
+    type: "group_join",
+  }),
 };

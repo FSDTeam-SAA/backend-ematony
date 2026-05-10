@@ -53,6 +53,9 @@ const userSchema = new Schema(
     },
     password_reset_token: { type: String, default: "" },
     refreshToken: { type: String, default: "" },
+    stripeCustomerId: { type: String, default: "" },
+    stripeConnectAccountId: { type: String, default: "" },
+    payoutsEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
