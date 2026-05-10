@@ -37,6 +37,55 @@ app.use(cookieParser());
 
 app.use("/public", express.static("public"));
 
+// ── Stripe Connect onboarding return pages ───────────────────────────────
+// Stripe redirects the browser to these URLs after the user completes (or
+// abandons) hosted Express onboarding. They are deliberately NOT under
+// /api/v1 and require no auth — they are loaded directly by Stripe.
+const onboardingHtml = (heading, body) => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ajo Family — ${heading}</title>
+  <style>
+    body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+           background:#FDF6EC; color:#0c2a23; min-height:100vh;
+           display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card { background:#fff; padding:32px 28px; border-radius:18px; max-width:380px; width:100%;
+            box-shadow:0 6px 24px rgba(0,0,0,0.06); text-align:center; }
+    h1 { margin:0 0 8px; font-size:22px; }
+    p  { margin:0 0 20px; color:#506b62; line-height:1.5; }
+    .ok  { color:#1d8569; font-weight:600; }
+    .warn { color:#b87600; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${heading}</h1>
+    <p>${body}</p>
+    <p>You can now close this tab and return to the Ajo Family app.</p>
+  </div>
+</body>
+</html>`;
+
+app.get("/connect/return", (req, res) => {
+  res.send(
+    onboardingHtml(
+      "<span class=\"ok\">Onboarding complete</span>",
+      "Thanks — Stripe has received your details. Withdrawals will be enabled as soon as your account is fully verified."
+    )
+  );
+});
+
+app.get("/connect/refresh", (req, res) => {
+  res.send(
+    onboardingHtml(
+      "<span class=\"warn\">Onboarding link expired</span>",
+      "This onboarding link is no longer valid. Open the Ajo Family app and tap <strong>Set up payouts</strong> again to get a fresh link."
+    )
+  );
+});
+
 // Mount the main router
 app.use("/api/v1", router);
 

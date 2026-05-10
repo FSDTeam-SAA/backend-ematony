@@ -12,6 +12,15 @@ import {
   createNotification,
   NotificationTemplates,
 } from "../services/notification.service.js";
+import {
+  createTopupPaymentSheet,
+  retrievePaymentIntent,
+} from "../services/stripe-payments.service.js";
+import {
+  payoutToConnectedAccount,
+  refreshConnectStatus,
+} from "../services/stripe-connect.service.js";
+import { User } from "../model/user.model.js";
 
 export const getPayments = catchAsync(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
@@ -170,13 +179,13 @@ export const recordMonthlyContribution = catchAsync(async (req, res) => {
 });
 
 export const getMyWalletBalance = catchAsync(async (req, res) => {
-  const userId = req.user._id;
+  const userId = new mongoose.Types.ObjectId(req.user._id);
 
-  const payouts = await Payment.aggregate([
+  const credits = await Payment.aggregate([
     {
       $match: {
-        userId: new mongoose.Types.ObjectId(userId),
-        type: "payout",
+        userId,
+        type: { $in: ["payout", "wallet_topup"] },
         paymentStatus: { $in: ["complete", "succeeded"] },
       },
     },
@@ -186,14 +195,14 @@ export const getMyWalletBalance = catchAsync(async (req, res) => {
   const withdrawals = await Withdrawal.aggregate([
     {
       $match: {
-        userId: new mongoose.Types.ObjectId(userId),
+        userId,
         status: { $in: ["pending", "approved", "paid"] },
       },
     },
     { $group: { _id: null, total: { $sum: "$amount" } } },
   ]);
 
-  const totalEarned = payouts[0]?.total || 0;
+  const totalEarned = credits[0]?.total || 0;
   const totalWithdrawn = withdrawals[0]?.total || 0;
   const available = Math.max(0, totalEarned - totalWithdrawn);
 
@@ -206,7 +215,7 @@ export const getMyWalletBalance = catchAsync(async (req, res) => {
 });
 
 export const requestWithdrawal = catchAsync(async (req, res) => {
-  const { amount, method, accountDetails, note } = req.body;
+  const { amount, method, accountDetails, note, currency } = req.body;
   const value = Number(amount);
 
   if (!value || value <= 0) {
@@ -220,12 +229,12 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
   }
 
   const userId = new mongoose.Types.ObjectId(req.user._id);
-  const [payouts, withdrawals] = await Promise.all([
+  const [credits, withdrawals] = await Promise.all([
     Payment.aggregate([
       {
         $match: {
           userId,
-          type: "payout",
+          type: { $in: ["payout", "wallet_topup"] },
           paymentStatus: { $in: ["complete", "succeeded"] },
         },
       },
@@ -242,7 +251,7 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
     ]),
   ]);
   const available =
-    (payouts[0]?.total || 0) - (withdrawals[0]?.total || 0);
+    (credits[0]?.total || 0) - (withdrawals[0]?.total || 0);
 
   if (value > available) {
     throw new AppError(
@@ -251,21 +260,62 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
     );
   }
 
+  // ── Require completed Stripe Connect onboarding before withdraw ─────────
+  const user = await User.findById(req.user._id);
+  if (!user?.stripeConnectAccountId) {
+    throw new AppError(
+      httpStatus.PRECONDITION_REQUIRED,
+      "Set up Stripe payouts before withdrawing"
+    );
+  }
+
+  // Re-check status with Stripe so we don't trust a stale flag.
+  const status = await refreshConnectStatus(user);
+  if (!status.payoutsEnabled) {
+    throw new AppError(
+      httpStatus.PRECONDITION_REQUIRED,
+      "Stripe onboarding incomplete — payouts not enabled yet"
+    );
+  }
+
   const withdrawal = await Withdrawal.create({
     userId: req.user._id,
     amount: value,
-    method: method || "",
+    method: method || "stripe_connect",
     accountDetails: accountDetails || "",
     note: note || "",
     status: "pending",
   });
+
+  // Attempt the Stripe Transfer. Failures leave the row as pending so admin
+  // can investigate and retry/refund manually.
+  try {
+    const transfer = await payoutToConnectedAccount({
+      user,
+      amount: value,
+      currency,
+      withdrawalId: withdrawal._id,
+    });
+    withdrawal.status = "paid";
+    withdrawal.processedAt = new Date();
+    withdrawal.note = withdrawal.note
+      ? `${withdrawal.note} | transfer: ${transfer.id}`
+      : `transfer: ${transfer.id}`;
+    await withdrawal.save();
+  } catch (err) {
+    console.error("Stripe transfer failed:", err?.message || err);
+    throw new AppError(
+      httpStatus.BAD_GATEWAY,
+      err?.message || "Stripe transfer failed"
+    );
+  }
 
   try {
     const tpl = NotificationTemplates.withdrawalRequested({ amount: value });
     await createNotification({
       userId: req.user._id,
       amount: value,
-      metadata: { withdrawalId: withdrawal._id },
+      metadata: { withdrawalId: withdrawal._id, status: withdrawal.status },
       ...tpl,
     });
   } catch (err) {
@@ -275,7 +325,7 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "Withdrawal request submitted successfully",
+    message: "Withdrawal processed successfully",
     data: withdrawal,
   });
 });
@@ -335,6 +385,108 @@ export const updateWithdrawalStatus = catchAsync(async (req, res) => {
     success: true,
     message: "Withdrawal status updated",
     data: withdrawal,
+  });
+});
+
+// ─── Stripe Top-Up ───────────────────────────────────────────────────────────
+// Two-step flow:
+//   1) POST /me/topup/sheet  → backend creates Stripe PaymentIntent + Ephemeral
+//      Key, returns the params PaymentSheet needs.
+//   2) Mobile app presents PaymentSheet, Stripe confirms the card payment.
+//   3) POST /me/topup/confirm → backend verifies via Stripe API that the
+//      PaymentIntent is succeeded, then creates a Payment row crediting the
+//      wallet. Idempotent: re-calling won't double-credit.
+
+export const createTopupSheet = catchAsync(async (req, res) => {
+  const { amount, currency } = req.body;
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Valid amount is required");
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  }
+
+  const sheet = await createTopupPaymentSheet({
+    user,
+    amount: value,
+    currency,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Top-up payment sheet created",
+    data: sheet,
+  });
+});
+
+export const confirmTopup = catchAsync(async (req, res) => {
+  const { paymentIntentId } = req.body;
+  if (!paymentIntentId || typeof paymentIntentId !== "string") {
+    throw new AppError(httpStatus.BAD_REQUEST, "paymentIntentId is required");
+  }
+
+  // Idempotency: if we already credited this PaymentIntent, return that.
+  const existing = await Payment.findOne({
+    userId: req.user._id,
+    transactionId: paymentIntentId,
+    type: "wallet_topup",
+  });
+  if (existing) {
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Top-up already recorded",
+      data: existing,
+    });
+  }
+
+  const intent = await retrievePaymentIntent(paymentIntentId);
+  if (!intent) {
+    throw new AppError(httpStatus.NOT_FOUND, "PaymentIntent not found");
+  }
+  if (String(intent.metadata?.userId) !== String(req.user._id)) {
+    throw new AppError(httpStatus.FORBIDDEN, "PaymentIntent does not belong to you");
+  }
+  if (intent.status !== "succeeded") {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Payment not successful (status: ${intent.status})`
+    );
+  }
+
+  const value = (intent.amount_received ?? intent.amount) / 100;
+
+  const payment = await Payment.create({
+    userId: req.user._id,
+    price: value,
+    paymentStatus: "complete",
+    type: "wallet_topup",
+    paymentMethod: "stripe",
+    transactionId: paymentIntentId,
+    referenceCode: `TOPUP-${Date.now()}`,
+  });
+
+  try {
+    const tpl = NotificationTemplates.topUp({ amount: value });
+    await createNotification({
+      userId: req.user._id,
+      amount: value,
+      metadata: { paymentId: payment._id, paymentIntentId },
+      ...tpl,
+    });
+  } catch (err) {
+    console.error("Top-up notification failed:", err?.message || err);
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: "Wallet topped up successfully",
+    data: payment,
   });
 });
 
