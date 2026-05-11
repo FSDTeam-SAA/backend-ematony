@@ -103,9 +103,35 @@ export const listMyGroups = catchAsync(async (req, res) => {
     memberCounts.map((m) => [String(m._id), m.count])
   );
 
+  // Determine which groups already have a completed contribution for THIS month
+  // from the requesting user. Groups without a paid contribution this month
+  // are surfaced as "pending" so the app can show them under Upcoming Payment.
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  );
+  const paidThisMonth = ids.length
+    ? await Payment.find({
+        userId: req.user._id,
+        groupId: { $in: ids },
+        type: "group_contribution",
+        paymentStatus: { $in: ["complete", "succeeded"] },
+        createdAt: { $gte: monthStart, $lte: monthEnd },
+      }).select("groupId")
+    : [];
+  const paidGroupIds = new Set(paidThisMonth.map((p) => String(p.groupId)));
+
   const data = groupsRaw.map((g) => {
     const obj = g.toObject();
     obj.membersCount = countMap.get(String(g._id)) || 0;
+    obj.paymentStatus = paidGroupIds.has(String(g._id)) ? "paid" : "pending";
     return obj;
   });
 
