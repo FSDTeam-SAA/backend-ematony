@@ -7,8 +7,6 @@ if (!stripeSecretKey) {
 
 export const stripe = new Stripe(stripeSecretKey || "");
 
-export const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY || "";
-
 const DEFAULT_CURRENCY = (process.env.STRIPE_CURRENCY || "usd").toLowerCase();
 
 /**
@@ -68,7 +66,6 @@ export const createTopupPaymentSheet = async ({ user, amount, currency }) => {
     paymentIntentId: paymentIntent.id,
     ephemeralKey: ephemeralKey.secret,
     customer: customerId,
-    publishableKey: stripePublishableKey,
     amount: Number(amount),
     currency: usedCurrency,
   };
