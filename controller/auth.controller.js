@@ -108,16 +108,12 @@ export const login = catchAsync(async (req, res) => {
   ) {
     throw new AppError(httpStatus.FORBIDDEN, "Password is not correct");
   }
+  let kycStatusForLogin = "approved";
   if (user.role !== "admin") {
     const kycRecord = await KycVerification.findOne({ userId: user._id }).sort({
       createdAt: -1,
     });
-    if (!kycRecord || kycRecord.status !== "approved") {
-      throw new AppError(
-        httpStatus.FORBIDDEN,
-        "KYC verification is required before signing in."
-      );
-    }
+    kycStatusForLogin = kycRecord?.status ?? "not_started";
   }
   if (!(await User.isOTPVerified(user._id))) {
     const otp = generateOTP();
@@ -169,8 +165,8 @@ export const login = catchAsync(async (req, res) => {
   });
 
   const sanitized = sanitizeUser(user);
-  sanitized.kycStatus = "approved";
-  sanitized.kycVerified = true;
+  sanitized.kycStatus = kycStatusForLogin;
+  sanitized.kycVerified = kycStatusForLogin === "approved";
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
