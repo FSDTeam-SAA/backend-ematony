@@ -1,4 +1,14 @@
 import mongoose from "mongoose";
+import {
+  DEFAULT_ADMIN_PAYOUT_PERCENT,
+  GROUP_GRACE_PERIOD_HOURS,
+  GROUP_LATE_FEE_PERCENT,
+  GROUP_MEMBER_LIMITS,
+  NIGERIA_ADMIN_PAYOUT_PERCENT,
+  SUPPORTED_GROUP_CURRENCIES,
+  SUPPORTED_GROUP_FREQUENCIES,
+  getReminderDaysForFrequency,
+} from "../utils/groupPolicy.js";
 
 const groupSchema = new mongoose.Schema(
   {
@@ -40,17 +50,58 @@ const groupSchema = new mongoose.Schema(
       type: String,
       default: "NGN",
       trim: true,
+      uppercase: true,
+      enum: SUPPORTED_GROUP_CURRENCIES,
     },
     contributionFrequency: {
       type: String,
-      enum: ["weekly", "biweekly", "monthly"],
+      enum: SUPPORTED_GROUP_FREQUENCIES,
       required: true,
     },
     maxMembers: {
       type: Number,
       required: true,
-      min: 2,
-      max: 100,
+      min: GROUP_MEMBER_LIMITS.min,
+      max: GROUP_MEMBER_LIMITS.max,
+    },
+    autoPaymentsEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    reminderDaysBefore: {
+      type: Number,
+      default: function defaultReminderDays() {
+        return getReminderDaysForFrequency(this.contributionFrequency);
+      },
+    },
+    gracePeriodHours: {
+      type: Number,
+      default: GROUP_GRACE_PERIOD_HOURS,
+      min: 1,
+    },
+    lateFeePercent: {
+      type: Number,
+      default: GROUP_LATE_FEE_PERCENT,
+      min: 0,
+    },
+    adminPayoutPercent: {
+      type: Number,
+      default: DEFAULT_ADMIN_PAYOUT_PERCENT,
+      min: 0,
+    },
+    nigeriaAdminPayoutPercent: {
+      type: Number,
+      default: NIGERIA_ADMIN_PAYOUT_PERCENT,
+      min: 0,
+    },
+    wheelMode: {
+      type: String,
+      enum: ["serial", "spin"],
+      default: "serial",
+    },
+    wheelSeededAt: {
+      type: Date,
+      default: null,
     },
     startDate: {
       type: Date,

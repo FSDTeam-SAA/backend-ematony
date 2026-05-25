@@ -3,6 +3,7 @@ import { io } from "../server.js";
 
 const VALID_TYPES = new Set([
   "payment_reminder",
+  "payment_late",
   "wheel_winner",
   "top_up",
   "withdrawal",
@@ -68,12 +69,19 @@ const formatAmount = (amount, currency = "₦") => {
 };
 
 export const NotificationTemplates = {
-  paymentReminder: ({ groupName }) => ({
-    title: "Monthly payment pending",
+  paymentReminder: ({ groupName, frequencyLabel }) => ({
+    title: `${frequencyLabel || "Group"} payment pending`,
     message: groupName
-      ? `Your monthly payment for ${groupName} is still pending. Please pay before the wheel starts.`
-      : "Your monthly group payment is still pending. Please pay before the wheel starts.",
+      ? `Your ${frequencyLabel?.toLowerCase() || "group"} payment for ${groupName} is due soon. Please pay before the due date.`
+      : `Your ${frequencyLabel?.toLowerCase() || "group"} payment is due soon. Please pay before the due date.`,
     type: "payment_reminder",
+  }),
+  paymentLate: ({ groupName, graceHours, lateFeePercent }) => ({
+    title: "Payment overdue",
+    message: groupName
+      ? `Your payment for ${groupName} is late. Pay within ${graceHours} hours to avoid a ${lateFeePercent}% late fee.`
+      : `Your payment is late. Pay within ${graceHours} hours to avoid a ${lateFeePercent}% late fee.`,
+    type: "payment_late",
   }),
   wheelWinner: ({ amount, groupName }) => ({
     title: "You won the wheel!",

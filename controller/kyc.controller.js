@@ -4,9 +4,10 @@ import AppError from "../errors/AppError.js";
 import { KycVerification } from "../model/kyc.model.js";
 import { User } from "../model/user.model.js";
 import {
-  createIdentityVerificationSession,
-  retrieveIdentityVerificationSession,
-} from "../services/stripe-identity.service.js";
+  resolveBvn,
+  resolveNin,
+  summariseIdentity,
+} from "../services/flutterwave-identity.service.js";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 import { parsePagination, buildMeta } from "../utils/pagination.js";
@@ -23,40 +24,18 @@ const getOrCreateKycForUser = async (userId) => {
   return kyc;
 };
 
-const mapStripeSessionToKycState = (session) => {
-  const status = session?.status || "";
-  const lastError =
-    session?.last_error?.reason ||
-    session?.last_error?.code ||
-    session?.last_error?.type ||
-    "";
-
-  if (status === "verified" || status === "approved") {
-    return {
-      status: "approved",
-      currentStep: "complete",
-      reviewedAt: new Date(),
-      rejectionReason: "",
-      stripeVerificationStatus: status,
-      stripeLastError: "",
-    };
-  }
-
-  if (status === "requires_input" || status === "canceled") {
-    return {
-      status: "resubmission_required",
-      currentStep: "review",
-      stripeVerificationStatus: status,
-      stripeLastError: lastError,
-    };
-  }
-
-  return {
-    status: "pending",
-    currentStep: "review",
-    stripeVerificationStatus: status,
-    stripeLastError: lastError,
-  };
+/**
+ * Compares the name registered against the BVN/NIN with the legal name the
+ * user typed during KYC. We do a lenient match (case-insensitive substring
+ * either way) since first/last/middle ordering varies between registries.
+ */
+const namesLooselyMatch = (registered, claimed) => {
+  if (!registered || !claimed) return false;
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const a = norm(registered);
+  const b = norm(claimed);
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
 };
 
 export const startKyc = catchAsync(async (req, res) => {
@@ -346,127 +325,97 @@ export const rejectKyc = catchAsync(async (req, res) => {
   });
 });
 
-export const createStripeVerificationSession = catchAsync(async (req, res) => {
-  const userId = req.user?._id;
-
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Invalid authenticated user id");
+/**
+ * POST /kyc/flutterwave/verify
+ * Body: { type: "bvn" | "nin", id: "<11 digits>" }
+ *
+ * Calls Flutterwave's KYC resolver, compares the returned name with the
+ * legalFullName the user previously entered, and either auto-approves or
+ * marks the record for resubmission. If the Flutterwave KYC add-on isn't
+ * enabled on the account, the call throws and we record the error so the
+ * user can see why it didn't go through.
+ */
+export const verifyIdentity = catchAsync(async (req, res) => {
+  const { type, id } = req.body;
+  const kind = String(type || "").toLowerCase();
+  if (!["bvn", "nin"].includes(kind)) {
+    throw new AppError(httpStatus.BAD_REQUEST, "type must be 'bvn' or 'nin'");
   }
 
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  const user = await User.findById(req.user._id);
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
+  const kyc = await getOrCreateKycForUser(req.user._id);
+
+  let raw;
+  try {
+    raw = kind === "bvn" ? await resolveBvn(id) : await resolveNin(id);
+  } catch (err) {
+    kyc.status = "resubmission_required";
+    kyc.currentStep = "review";
+    kyc.flutterwaveVerificationStatus = "failed";
+    kyc.flutterwaveLastError = err?.message || "Verification failed";
+    await kyc.save();
+
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      err?.message || "Identity verification failed"
+    );
   }
 
-  const session = await createIdentityVerificationSession({ user });
-  const kyc = await KycVerification.findOneAndUpdate(
-    { userId },
-    {
-      $set: {
-        status: "pending",
-        currentStep: "review",
-        stripeVerificationId: session.id,
-        stripeVerificationUrl: session.url || "",
-        stripeVerificationStatus: session.status || "",
-        stripeLastError: "",
-        documentType: "document",
-        submittedAt: new Date(),
-      },
-    },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
-  );
+  const summary = summariseIdentity(raw);
+  const fullNameFromRegistry = `${summary?.firstName || ""} ${
+    summary?.lastName || ""
+  }`.trim();
+  const claimedName = kyc.legalFullName || user.name || "";
+  const matches = namesLooselyMatch(fullNameFromRegistry, claimedName);
 
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: "Stripe verification session created successfully",
-    data: {
-      ...kyc.toObject(),
-      url: session.url || "",
-      clientSecret: session.client_secret || "",
-    },
-  });
-});
+  kyc.documentType = kind.toUpperCase();
+  kyc.documentNumber = String(id);
+  kyc.flutterwaveVerificationType = kind;
+  kyc.flutterwaveVerificationId = String(id);
+  kyc.flutterwaveVerificationStatus = matches ? "verified" : "name_mismatch";
+  kyc.flutterwaveLastError = "";
+  kyc.providerRef = `flw-${kind}-${Date.now()}`;
+  kyc.submittedAt = new Date();
 
-export const stripeIdentityReturn = (req, res) => {
-  const sessionId = (req.query.session_id || req.query.sessionId || "").toString();
-  const deepLinkScheme = process.env.APP_DEEP_LINK_SCHEME || "ematony";
-  const deepLink = `${deepLinkScheme}://kyc/complete${
-    sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""
-  }`;
-
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Returning to Ematony…</title>
-  <style>
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#FFFCF6;color:#063627;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
-    .card{max-width:420px;width:100%;background:#fff;border-radius:18px;padding:32px 24px;box-shadow:0 10px 30px rgba(6,54,39,.08)}
-    h1{font-size:22px;margin:0 0 8px;color:#146456}
-    p{margin:0 0 18px;color:#4b5b56;line-height:1.5}
-    a.btn{display:inline-block;background:#146456;color:#fff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:600}
-    .small{font-size:12px;color:#7B8A85;margin-top:18px}
-  </style>
-  <script>
-    (function () {
-      var link = ${JSON.stringify(deepLink)};
-      // Bounce immediately into the app via custom scheme.
-      window.location.replace(link);
-      // Then try to close the tab. Browsers may block this; the page text
-      // remains as a clear instruction for the user.
-      setTimeout(function () {
-        try { window.close(); } catch (e) {}
-      }, 600);
-    })();
-  </script>
-</head>
-<body>
-  <div class="card">
-    <h1>Verification complete</h1>
-    <p>You can close this tab and return to the Ematony app to sign in.</p>
-    <a class="btn" href="${deepLink}">Open Ematony</a>
-    <div class="small">If the app does not open automatically, tap the button above.</div>
-  </div>
-</body>
-</html>`);
-};
-
-export const getStripeVerificationSessionStatus = catchAsync(async (req, res) => {
-  const { sessionId } = req.params;
-
-  if (!sessionId?.trim()) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Stripe session id is required");
+  if (matches) {
+    kyc.status = "approved";
+    kyc.currentStep = "complete";
+    kyc.reviewedAt = new Date();
+    kyc.rejectionReason = "";
+  } else {
+    kyc.status = "resubmission_required";
+    kyc.currentStep = "review";
+    kyc.rejectionReason = `Name on ${kind.toUpperCase()} (${fullNameFromRegistry}) does not match the name on the application (${claimedName})`;
   }
-
-  const kyc = await KycVerification.findOne({
-    userId: req.user._id,
-    stripeVerificationId: sessionId.trim(),
-  });
-
-  if (!kyc) {
-    throw new AppError(httpStatus.NOT_FOUND, "KYC verification session not found");
-  }
-
-  const session = await retrieveIdentityVerificationSession(sessionId.trim());
-
-  Object.assign(kyc, mapStripeSessionToKycState(session));
   await kyc.save();
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Stripe verification session status fetched successfully",
+    message: matches
+      ? "Identity verified successfully"
+      : "Identity verified but name does not match",
     data: {
       kycApplication: kyc,
-      stripeSession: {
-        id: session.id,
-        status: session.status,
-        lastError: session.last_error || null,
-        lastVerificationReport: session.last_verification_report || null,
-      },
+      registry: summary,
+      matches,
     },
+  });
+});
+
+/**
+ * Polled by the mobile app after the user resubmits, to refresh the local
+ * KYC state. Now that verification is synchronous (BVN/NIN call returns
+ * immediately), this is just a getter — kept for client compatibility.
+ */
+export const getVerificationStatus = catchAsync(async (req, res) => {
+  const kyc = await getOrCreateKycForUser(req.user._id);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "KYC verification status fetched",
+    data: { kycApplication: kyc },
   });
 });

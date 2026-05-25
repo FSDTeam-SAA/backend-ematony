@@ -1,13 +1,17 @@
 import express from "express";
 import {
-  getConnectStatus,
-  startOnboarding,
+  getBanks,
+  getPayoutStatus,
+  resolveAccount,
+  saveBankAccount,
 } from "../controller/connect.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/onboarding", protect, startOnboarding);
-router.get("/status", protect, getConnectStatus);
+router.get("/banks", protect, getBanks);
+router.post("/resolve", protect, resolveAccount);
+router.post("/bank", protect, saveBankAccount);
+router.get("/status", protect, getPayoutStatus);
 
 export default router;

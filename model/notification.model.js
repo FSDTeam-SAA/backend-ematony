@@ -36,6 +36,7 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: [
         "payment_reminder",
+        "payment_late",
         "wheel_winner",
         "top_up",
         "withdrawal",

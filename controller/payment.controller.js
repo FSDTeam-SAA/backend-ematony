@@ -13,14 +13,18 @@ import {
   NotificationTemplates,
 } from "../services/notification.service.js";
 import {
-  createTopupPaymentSheet,
-  retrievePaymentIntent,
-} from "../services/stripe-payments.service.js";
-import {
-  payoutToConnectedAccount,
-  refreshConnectStatus,
-} from "../services/stripe-connect.service.js";
+  createTopupPaymentLink,
+  verifyTransactionById,
+  verifyTransactionByTxRef,
+} from "../services/flutterwave-payments.service.js";
+import { createTransfer } from "../services/flutterwave-transfers.service.js";
 import { User } from "../model/user.model.js";
+import {
+  calculateLateFee,
+  getContributionPeriod,
+  normalizeGroupFrequency,
+  roundMoney,
+} from "../utils/groupPolicy.js";
 
 export const getPayments = catchAsync(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
@@ -135,30 +139,40 @@ export const recordMonthlyContribution = catchAsync(async (req, res) => {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+  const period = getContributionPeriod(group, now);
 
   const existing = await Payment.findOne({
     userId: req.user._id,
     groupId,
     type: "group_contribution",
     paymentStatus: { $in: ["complete", "succeeded"] },
-    createdAt: { $gte: monthStart, $lte: monthEnd },
+    periodStart: period.periodStart,
   });
   if (existing) {
     throw new AppError(
       httpStatus.CONFLICT,
-      "You have already paid this month's contribution"
+      "You have already paid this contribution period"
     );
   }
 
-  const day = now.getDate();
-  const eligibleForWheel = day <= 25;
+  const isLate = now > period.dueDate;
+  const isPastGrace = now > period.graceDeadline;
+  const lateFeeAmount = isPastGrace ? calculateLateFee(group.contributionAmount) : 0;
+  const totalAmount = roundMoney(group.contributionAmount + lateFeeAmount);
+  const eligibleForWheel = now <= period.graceDeadline;
 
   const payment = await Payment.create({
     userId: req.user._id,
     groupId,
-    price: group.contributionAmount,
+    price: totalAmount,
+    baseAmount: group.contributionAmount,
+    lateFeeApplied: lateFeeAmount > 0,
+    lateFeeAmount,
+    adminCreditAmount: lateFeeAmount,
+    currencyCode: group.currencyCode,
+    dueDate: period.dueDate,
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
     paymentStatus: "complete",
     type: "group_contribution",
     paymentMethod: paymentMethod || "manual",
@@ -166,15 +180,51 @@ export const recordMonthlyContribution = catchAsync(async (req, res) => {
     referenceCode: `CONTRIB-${year}${String(month).padStart(2, "0")}-${String(
       req.user._id
     ).slice(-6)}`,
+    notes: lateFeeAmount > 0 ? "Late fee credited to group admin" : "",
   });
+
+  if (lateFeeAmount > 0) {
+    await Payment.create({
+      userId: group.ownerUserId,
+      groupId,
+      price: lateFeeAmount,
+      baseAmount: 0,
+      lateFeeApplied: true,
+      lateFeeAmount,
+      adminCreditAmount: lateFeeAmount,
+      currencyCode: group.currencyCode,
+      dueDate: period.dueDate,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      paymentStatus: "complete",
+      type: "late_fee_admin_credit",
+      paymentMethod: paymentMethod || "manual",
+      transactionId: transactionId || "",
+      referenceCode: `LATE-${year}${String(month).padStart(2, "0")}-${String(
+        req.user._id
+      ).slice(-6)}`,
+      notes: "7.5% late fee credited to group admin",
+    });
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: eligibleForWheel
-      ? "Monthly contribution recorded. You are eligible for this month's wheel."
-      : "Monthly contribution recorded. Note: payment was after the 25th, so you are not eligible for this month's wheel.",
-    data: { payment, eligibleForWheel, month, year },
+    message: lateFeeAmount > 0
+      ? "Contribution recorded with a 7.5% late fee credited to the group admin."
+      : isLate
+        ? "Contribution recorded during the 24-hour grace period."
+        : "Contribution recorded successfully.",
+    data: {
+      payment,
+      eligibleForWheel,
+      month,
+      year,
+      frequency: normalizeGroupFrequency(group.contributionFrequency),
+      dueDate: period.dueDate,
+      graceDeadline: period.graceDeadline,
+      lateFeeAmount,
+    },
   });
 });
 
@@ -260,53 +310,59 @@ export const requestWithdrawal = catchAsync(async (req, res) => {
     );
   }
 
-  // ── Require completed Stripe Connect onboarding before withdraw ─────────
+  // Require a saved + resolved Flutterwave bank account before paying out.
   const user = await User.findById(req.user._id);
-  if (!user?.stripeConnectAccountId) {
+  if (!user?.bankAccount?.number || !user?.bankAccount?.bankCode) {
     throw new AppError(
       httpStatus.PRECONDITION_REQUIRED,
-      "Set up Stripe payouts before withdrawing"
+      "Add your bank account before withdrawing"
     );
   }
-
-  // Re-check status with Stripe so we don't trust a stale flag.
-  const status = await refreshConnectStatus(user);
-  if (!status.payoutsEnabled) {
+  if (!user.payoutsEnabled) {
     throw new AppError(
       httpStatus.PRECONDITION_REQUIRED,
-      "Stripe onboarding incomplete — payouts not enabled yet"
+      "Bank account is not verified yet"
     );
   }
 
   const withdrawal = await Withdrawal.create({
     userId: req.user._id,
     amount: value,
-    method: method || "stripe_connect",
-    accountDetails: accountDetails || "",
+    method: method || "flutterwave_transfer",
+    accountDetails:
+      accountDetails ||
+      `${user.bankAccount.bankName || ""} • ${user.bankAccount.number}`,
     note: note || "",
     status: "pending",
   });
 
-  // Attempt the Stripe Transfer. Failures leave the row as pending so admin
-  // can investigate and retry/refund manually.
+  // Attempt the Flutterwave transfer. Failures leave the row as pending so
+  // admin can investigate and retry/refund manually.
   try {
-    const transfer = await payoutToConnectedAccount({
+    const { transfer, reference } = await createTransfer({
       user,
       amount: value,
       currency,
       withdrawalId: withdrawal._id,
     });
-    withdrawal.status = "paid";
-    withdrawal.processedAt = new Date();
+
+    // Flutterwave transfers settle asynchronously, so we mark the row as
+    // "paid" only when the immediate response shows SUCCESSFUL; otherwise
+    // we leave it pending and rely on admin/cron to reconcile later.
+    const status = (transfer?.status || "").toUpperCase();
+    if (status === "SUCCESSFUL") {
+      withdrawal.status = "paid";
+      withdrawal.processedAt = new Date();
+    }
     withdrawal.note = withdrawal.note
-      ? `${withdrawal.note} | transfer: ${transfer.id}`
-      : `transfer: ${transfer.id}`;
+      ? `${withdrawal.note} | flw_ref: ${reference}`
+      : `flw_ref: ${reference}`;
     await withdrawal.save();
   } catch (err) {
-    console.error("Stripe transfer failed:", err?.message || err);
+    console.error("Flutterwave transfer failed:", err?.message || err);
     throw new AppError(
       httpStatus.BAD_GATEWAY,
-      err?.message || "Stripe transfer failed"
+      err?.message || "Flutterwave transfer failed"
     );
   }
 
@@ -388,14 +444,15 @@ export const updateWithdrawalStatus = catchAsync(async (req, res) => {
   });
 });
 
-// ─── Stripe Top-Up ───────────────────────────────────────────────────────────
+// ─── Flutterwave Top-Up ──────────────────────────────────────────────────────
 // Two-step flow:
-//   1) POST /me/topup/sheet  → backend creates Stripe PaymentIntent + Ephemeral
-//      Key, returns the params PaymentSheet needs.
-//   2) Mobile app presents PaymentSheet, Stripe confirms the card payment.
-//   3) POST /me/topup/confirm → backend verifies via Stripe API that the
-//      PaymentIntent is succeeded, then creates a Payment row crediting the
-//      wallet. Idempotent: re-calling won't double-credit.
+//   1) POST /me/topup/sheet  → backend asks Flutterwave for a hosted-checkout
+//      link and returns `{ paymentLink, txRef, ... }`.
+//   2) Mobile app opens the link in an external browser; user pays.
+//   3) POST /me/topup/confirm with `{ txRef }` (or transactionId) → backend
+//      verifies via Flutterwave's /transactions/verify endpoint and creates a
+//      Payment row crediting the wallet. Idempotent — re-calling won't
+//      double-credit.
 
 export const createTopupSheet = catchAsync(async (req, res) => {
   const { amount, currency } = req.body;
@@ -409,7 +466,7 @@ export const createTopupSheet = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
-  const sheet = await createTopupPaymentSheet({
+  const link = await createTopupPaymentLink({
     user,
     amount: value,
     currency,
@@ -418,21 +475,23 @@ export const createTopupSheet = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Top-up payment sheet created",
-    data: sheet,
+    message: "Top-up payment link created",
+    data: link,
   });
 });
 
 export const confirmTopup = catchAsync(async (req, res) => {
-  const { paymentIntentId } = req.body;
-  if (!paymentIntentId || typeof paymentIntentId !== "string") {
-    throw new AppError(httpStatus.BAD_REQUEST, "paymentIntentId is required");
+  const { txRef, transactionId } = req.body;
+  if ((!txRef || typeof txRef !== "string") && !transactionId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "txRef or transactionId is required");
   }
 
-  // Idempotency: if we already credited this PaymentIntent, return that.
+  // Idempotency: if we already credited this tx_ref or Flutterwave
+  // transaction id, return that record without re-charging.
+  const idempotencyKey = txRef || String(transactionId);
   const existing = await Payment.findOne({
     userId: req.user._id,
-    transactionId: paymentIntentId,
+    transactionId: idempotencyKey,
     type: "wallet_topup",
   });
   if (existing) {
@@ -444,29 +503,35 @@ export const confirmTopup = catchAsync(async (req, res) => {
     });
   }
 
-  const intent = await retrievePaymentIntent(paymentIntentId);
-  if (!intent) {
-    throw new AppError(httpStatus.NOT_FOUND, "PaymentIntent not found");
+  // Ask Flutterwave for the authoritative transaction state.
+  const tx = txRef
+    ? await verifyTransactionByTxRef(txRef)
+    : await verifyTransactionById(transactionId);
+
+  if (!tx) {
+    throw new AppError(httpStatus.NOT_FOUND, "Transaction not found");
   }
-  if (String(intent.metadata?.userId) !== String(req.user._id)) {
-    throw new AppError(httpStatus.FORBIDDEN, "PaymentIntent does not belong to you");
+  if (String(tx.meta?.userId) !== String(req.user._id)) {
+    throw new AppError(httpStatus.FORBIDDEN, "Transaction does not belong to you");
   }
-  if (intent.status !== "succeeded") {
+  const txStatus = (tx.status || "").toLowerCase();
+  if (txStatus !== "successful") {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `Payment not successful (status: ${intent.status})`
+      `Payment not successful (status: ${tx.status || "unknown"})`
     );
   }
 
-  const value = (intent.amount_received ?? intent.amount) / 100;
+  const value = Number(tx.amount_settled ?? tx.charged_amount ?? tx.amount);
 
   const payment = await Payment.create({
     userId: req.user._id,
     price: value,
     paymentStatus: "complete",
     type: "wallet_topup",
-    paymentMethod: "stripe",
-    transactionId: paymentIntentId,
+    currencyCode: currency || "NGN",
+    paymentMethod: "flutterwave",
+    transactionId: idempotencyKey,
     referenceCode: `TOPUP-${Date.now()}`,
   });
 
@@ -475,7 +540,11 @@ export const confirmTopup = catchAsync(async (req, res) => {
     await createNotification({
       userId: req.user._id,
       amount: value,
-      metadata: { paymentId: payment._id, paymentIntentId },
+      metadata: {
+        paymentId: payment._id,
+        txRef: tx.tx_ref || txRef || "",
+        flwId: tx.id || transactionId || "",
+      },
       ...tpl,
     });
   } catch (err) {
@@ -502,6 +571,7 @@ export const recordWalletTopUp = catchAsync(async (req, res) => {
     price: value,
     paymentStatus: "complete",
     type: "wallet_topup",
+    currencyCode: req.body.currency || "NGN",
     paymentMethod: paymentMethod || "manual",
     transactionId: transactionId || "",
     referenceCode: `TOPUP-${Date.now()}`,

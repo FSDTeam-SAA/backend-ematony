@@ -2,17 +2,16 @@ import express from "express";
 import {
   addKycDocument,
   approveKyc,
-  createStripeVerificationSession,
-  getStripeVerificationSessionStatus,
   getKycList,
   getMyKyc,
+  getVerificationStatus,
   rejectKyc,
   saveKycDocumentInfo,
   saveKycPersonalInfo,
   startKyc,
-  stripeIdentityReturn,
   submitKyc,
   uploadKycSelfie,
+  verifyIdentity,
 } from "../controller/kyc.controller.js";
 import { isAdmin, protect } from "../middleware/auth.middleware.js";
 
@@ -25,9 +24,8 @@ router.put("/document", protect, saveKycDocumentInfo);
 router.post("/documents", protect, addKycDocument);
 router.post("/selfie", protect, uploadKycSelfie);
 router.post("/submit", protect, submitKyc);
-router.post("/stripe/verification-session", protect, createStripeVerificationSession);
-router.get("/stripe/verification-session/:sessionId", protect, getStripeVerificationSessionStatus);
-router.get("/stripe/return", stripeIdentityReturn);
+router.post("/flutterwave/verify", protect, verifyIdentity);
+router.get("/flutterwave/status", protect, getVerificationStatus);
 router.get("/all", protect, isAdmin, getKycList);
 router.patch("/:id/approve", protect, isAdmin, approveKyc);
 router.patch("/:id/reject", protect, isAdmin, rejectKyc);
