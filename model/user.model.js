@@ -53,8 +53,14 @@ const userSchema = new Schema(
     },
     password_reset_token: { type: String, default: "" },
     refreshToken: { type: String, default: "" },
-    stripeCustomerId: { type: String, default: "" },
-    stripeConnectAccountId: { type: String, default: "" },
+    flutterwaveCustomerId: { type: String, default: "" },
+    bankAccount: {
+      number: { type: String, default: "" },
+      bankCode: { type: String, default: "" },
+      bankName: { type: String, default: "" },
+      accountName: { type: String, default: "" },
+      currency: { type: String, default: "NGN" },
+    },
     payoutsEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }

@@ -37,53 +37,67 @@ app.use(cookieParser());
 
 app.use("/public", express.static("public"));
 
-// ── Stripe Connect onboarding return pages ───────────────────────────────
-// Stripe redirects the browser to these URLs after the user completes (or
-// abandons) hosted Express onboarding. They are deliberately NOT under
-// /api/v1 and require no auth — they are loaded directly by Stripe.
-const onboardingHtml = (heading, body) => `<!doctype html>
+// ── Flutterwave checkout return page ──────────────────────────────────────
+// Flutterwave redirects the user's browser here after a hosted-checkout
+// payment completes (or is cancelled). The page bounces straight back into
+// the app via the configured deep-link scheme so the wallet screen can call
+// /payment/me/topup/confirm with the tx_ref.
+app.get("/payments/return", (req, res) => {
+  const status = String(req.query.status || "").toLowerCase();
+  const txRef = String(req.query.tx_ref || "");
+  const transactionId = String(req.query.transaction_id || "");
+  const deepLinkScheme = process.env.APP_DEEP_LINK_SCHEME || "ematony";
+
+  const params = new URLSearchParams();
+  if (status) params.append("status", status);
+  if (txRef) params.append("tx_ref", txRef);
+  if (transactionId) params.append("transaction_id", transactionId);
+  const qs = params.toString();
+  const deepLink = `${deepLinkScheme}://payments/return${qs ? `?${qs}` : ""}`;
+
+  const heading =
+    status === "successful" || status === "completed"
+      ? '<span style="color:#1d8569;font-weight:600">Payment received</span>'
+      : status === "cancelled"
+      ? '<span style="color:#b87600;font-weight:600">Payment cancelled</span>'
+      : "Returning to the app…";
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Ajo Family — ${heading}</title>
+  <title>Returning to Ajo Family…</title>
   <style>
     body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
            background:#FDF6EC; color:#0c2a23; min-height:100vh;
            display:flex; align-items:center; justify-content:center; padding:24px; }
-    .card { background:#fff; padding:32px 28px; border-radius:18px; max-width:380px; width:100%;
+    .card { background:#fff; padding:32px 28px; border-radius:18px; max-width:420px; width:100%;
             box-shadow:0 6px 24px rgba(0,0,0,0.06); text-align:center; }
-    h1 { margin:0 0 8px; font-size:22px; }
-    p  { margin:0 0 20px; color:#506b62; line-height:1.5; }
-    .ok  { color:#1d8569; font-weight:600; }
-    .warn { color:#b87600; font-weight:600; }
+    h1 { margin:0 0 8px; font-size:22px; color:#146456; }
+    p { margin:0 0 18px; color:#506b62; line-height:1.5; }
+    a.btn { display:inline-block; background:#146456; color:#fff; text-decoration:none;
+            padding:12px 22px; border-radius:12px; font-weight:600; }
+    .small { font-size:12px; color:#7B8A85; margin-top:18px; }
   </style>
+  <script>
+    (function () {
+      var link = ${JSON.stringify(deepLink)};
+      window.location.replace(link);
+      setTimeout(function () { try { window.close(); } catch (e) {} }, 600);
+    })();
+  </script>
 </head>
 <body>
   <div class="card">
     <h1>${heading}</h1>
-    <p>${body}</p>
-    <p>You can now close this tab and return to the Ajo Family app.</p>
+    <p>You can close this tab and return to the Ajo Family app.</p>
+    <a class="btn" href="${deepLink}">Open Ajo Family</a>
+    <div class="small">If the app does not open automatically, tap the button above.</div>
   </div>
 </body>
-</html>`;
-
-app.get("/connect/return", (req, res) => {
-  res.send(
-    onboardingHtml(
-      "<span class=\"ok\">Onboarding complete</span>",
-      "Thanks — Stripe has received your details. Withdrawals will be enabled as soon as your account is fully verified."
-    )
-  );
-});
-
-app.get("/connect/refresh", (req, res) => {
-  res.send(
-    onboardingHtml(
-      "<span class=\"warn\">Onboarding link expired</span>",
-      "This onboarding link is no longer valid. Open the Ajo Family app and tap <strong>Set up payouts</strong> again to get a fresh link."
-    )
-  );
+</html>`);
 });
 
 // Mount the main router

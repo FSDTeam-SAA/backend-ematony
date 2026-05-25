@@ -15,9 +15,21 @@ import {
   NotificationTemplates,
 } from "../services/notification.service.js";
 import { User } from "../model/user.model.js";
+import {
+  GROUP_GRACE_PERIOD_HOURS,
+  GROUP_LATE_FEE_PERCENT,
+  GROUP_MEMBER_LIMITS,
+  SUPPORTED_GROUP_CURRENCIES,
+  getAdminPayoutPercent,
+  getContributionPeriod,
+  getGroupCycleDurationLabel,
+  getReminderDaysForFrequency,
+  normalizeGroupFrequency,
+  roundMoney,
+} from "../utils/groupPolicy.js";
 
 const groupProjection =
-  "name description inviteCode status contributionAmount currencyCode contributionFrequency maxMembers startDate endDate ownerUserId createdAt updatedAt";
+  "name description inviteCode status contributionAmount currencyCode contributionFrequency maxMembers autoPaymentsEnabled reminderDaysBefore gracePeriodHours lateFeePercent adminPayoutPercent nigeriaAdminPayoutPercent wheelMode wheelSeededAt startDate endDate ownerUserId createdAt updatedAt";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -56,7 +68,8 @@ const buildWheelData = async (groupId) => {
   const rotations = members.map((membership, index) => ({
     membershipId: membership._id,
     user: membership.userId,
-    positionNumber: membership.payoutPosition || index + 1,
+    positionNumber:
+      membership.payoutPosition != null ? membership.payoutPosition : index,
     membershipRole: membership.membershipRole,
     joinedAt: membership.joinedAt,
   }));
@@ -154,6 +167,8 @@ export const createGroup = catchAsync(async (req, res) => {
     maxMembers,
     startDate,
     currencyCode,
+    autoPayments,
+    autoPaymentsEnabled,
   } = req.body;
 
   if (!name?.trim()) {
@@ -162,14 +177,27 @@ export const createGroup = catchAsync(async (req, res) => {
   if (!contributionAmount || Number(contributionAmount) <= 0) {
     throw new AppError(httpStatus.BAD_REQUEST, "Valid contribution amount is required");
   }
-  const resolvedFrequency = contributionFrequency || frequency;
+  const resolvedFrequency = normalizeGroupFrequency(
+    contributionFrequency || frequency
+  );
   if (!resolvedFrequency) {
     throw new AppError(httpStatus.BAD_REQUEST, "Contribution frequency is required");
   }
-  if (!maxMembers || Number(maxMembers) < 3 || Number(maxMembers) > 36) {
+  if (
+    !maxMembers ||
+    Number(maxMembers) < GROUP_MEMBER_LIMITS.min ||
+    Number(maxMembers) > GROUP_MEMBER_LIMITS.max
+  ) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       "Group must allow between 3 and 36 members"
+    );
+  }
+  const normalizedCurrency = (currencyCode || "NGN").toString().trim().toUpperCase();
+  if (!SUPPORTED_GROUP_CURRENCIES.includes(normalizedCurrency)) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Currency must be one of NGN, USD, GBP, or EUR"
     );
   }
 
@@ -193,6 +221,8 @@ export const createGroup = catchAsync(async (req, res) => {
   }
 
   const inviteCode = generateUniqueId().toUpperCase();
+  const reminderDaysBefore = getReminderDaysForFrequency(resolvedFrequency);
+  const owner = await User.findById(req.user._id).select("location");
   const group = await SavingsGroup.create({
     ownerUserId: req.user._id,
     name: name.trim(),
@@ -202,7 +232,16 @@ export const createGroup = catchAsync(async (req, res) => {
     contributionFrequency: resolvedFrequency,
     maxMembers: Number(maxMembers),
     startDate: startDate || null,
-    currencyCode: currencyCode || "NGN",
+    currencyCode: normalizedCurrency,
+    autoPaymentsEnabled:
+      autoPaymentsEnabled === true || autoPayments === true,
+    reminderDaysBefore,
+    gracePeriodHours: GROUP_GRACE_PERIOD_HOURS,
+    lateFeePercent: GROUP_LATE_FEE_PERCENT,
+    adminPayoutPercent: getAdminPayoutPercent({
+      currencyCode: normalizedCurrency,
+      ownerLocation: owner?.location,
+    }),
     status: "active",
   });
 
@@ -211,7 +250,7 @@ export const createGroup = catchAsync(async (req, res) => {
     userId: req.user._id,
     membershipRole: "owner",
     status: "active",
-    payoutPosition: 1,
+    payoutPosition: 0,
     joinedAt: new Date(),
   });
 
@@ -222,6 +261,10 @@ export const createGroup = catchAsync(async (req, res) => {
     data: {
       group,
       inviteCode: group.inviteCode,
+      cycleDurationLabel: getGroupCycleDurationLabel(
+        group.contributionFrequency,
+        group.maxMembers
+      ),
     },
   });
 });
@@ -415,7 +458,7 @@ export const approveGroupRequest = catchAsync(async (req, res) => {
         status: "active",
         membershipRole: "member",
         joinedAt: new Date(),
-        payoutPosition: activeMemberCount + 1,
+        payoutPosition: activeMemberCount,
       },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -613,8 +656,6 @@ export const getGroupWheel = catchAsync(async (req, res) => {
   const isOwner = String(group.ownerUserId) === String(req.user._id);
   const canSpin =
     isOwner &&
-    day >= 25 &&
-    day <= 30 &&
     !currentWinner &&
     wheel.totalMembers >= 3;
 
@@ -629,7 +670,8 @@ export const getGroupWheel = catchAsync(async (req, res) => {
       recentWinners,
       canSpin,
       isOwner,
-      spinWindow: { startDay: 25, endDay: 30, today: day },
+      wheelMode: group.wheelMode,
+      spinWindow: { startDay: 1, endDay: 31, today: day },
     },
   });
 });
@@ -658,14 +700,6 @@ export const spinGroupWheel = catchAsync(async (req, res) => {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  // Spin only allowed between day 25 and day 30
-  if (day < 25 || day > 30) {
-    throw new AppError(
-      httpStatus.FORBIDDEN,
-      "The wheel can only be spun between day 25 and day 30 of the month"
-    );
-  }
-
   // Only once per month
   const existingWinner = await GroupWinner.findOne({
     groupId: id,
@@ -691,14 +725,14 @@ export const spinGroupWheel = catchAsync(async (req, res) => {
     );
   }
 
-  // Eligible: paid by 25th of this month (paymentStatus complete/succeeded)
-  const monthStart = new Date(year, month - 1, 1);
-  const cutoff = new Date(year, month - 1, 25, 23, 59, 59, 999);
+  const { periodStart, graceDeadline } = getContributionPeriod(group, now);
+  const cutoff = graceDeadline;
   const paidPayments = await Payment.find({
     groupId: id,
     type: "group_contribution",
     paymentStatus: { $in: ["complete", "succeeded"] },
-    createdAt: { $gte: monthStart, $lte: cutoff },
+    periodStart,
+    createdAt: { $lte: cutoff },
   }).select("userId");
   const paidUserIds = new Set(paidPayments.map((p) => String(p.userId)));
 
@@ -723,22 +757,40 @@ export const spinGroupWheel = catchAsync(async (req, res) => {
       .map((w) => String(w.userId))
   );
 
-  const eligible = memberships.filter((m) => {
+  const eligibleByPayment = memberships.filter((m) => {
     const uid = String(m.userId._id || m.userId);
     return paidUserIds.has(uid) && !previousWinnerIdsThisCycle.has(uid);
   });
 
-  if (eligible.length === 0) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "No eligible members. Members must pay by the 25th and not have already won this cycle."
+  let eligible = eligibleByPayment;
+  let cycleMode = group.wheelMode || "serial";
+  if (cycleMode === "serial") {
+    eligible = eligibleByPayment.sort(
+      (a, b) => (a.payoutPosition ?? 0) - (b.payoutPosition ?? 0)
     );
   }
 
-  const pick = eligible[Math.floor(Math.random() * eligible.length)];
+  if (eligible.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "No eligible members. Members must pay within the current contribution window and not have already won this cycle."
+    );
+  }
+
+  const pick =
+    cycleMode === "serial"
+      ? eligible[0]
+      : eligible[Math.floor(Math.random() * eligible.length)];
   const winnerUserId = pick.userId._id || pick.userId;
 
-  const winningAmount = group.contributionAmount * memberships.length;
+  const totalPool = roundMoney(group.contributionAmount * memberships.length);
+  const owner = await User.findById(group.ownerUserId).select("location");
+  const adminPercent = getAdminPayoutPercent({
+    currencyCode: group.currencyCode,
+    ownerLocation: owner?.location,
+  });
+  const adminAmount = roundMoney((totalPool * adminPercent) / 100);
+  const winningAmount = roundMoney(totalPool - adminAmount);
 
   const winner = await GroupWinner.create({
     groupId: id,
@@ -750,17 +802,53 @@ export const spinGroupWheel = catchAsync(async (req, res) => {
     spunBy: req.user._id,
   });
 
-  // Credit wallet via payout payment
+  if (cycleMode === "spin") {
+    const rotatedMemberships = [...memberships].sort(() => Math.random() - 0.5);
+    await Promise.all(
+      rotatedMemberships.map((membership, index) =>
+        GroupMembership.updateOne(
+          { _id: membership._id },
+          { $set: { payoutPosition: index } }
+        )
+      )
+    );
+    group.wheelSeededAt = new Date();
+  }
+
+  if (group.wheelMode === "serial" && previousWinnerIdsThisCycle.size + 1 >= memberships.length) {
+    group.wheelMode = "spin";
+  }
+  await group.save();
+
   await Payment.create({
     userId: winnerUserId,
     groupId: id,
     price: winningAmount,
+    winnerPayoutAmount: winningAmount,
+    adminCreditAmount: adminAmount,
+    currencyCode: group.currencyCode,
     paymentStatus: "complete",
     type: "payout",
     referenceCode: `WIN-${year}${String(month).padStart(2, "0")}-${String(
       winner._id
     ).slice(-6)}`,
   });
+
+  if (adminAmount > 0) {
+    await Payment.create({
+      userId: group.ownerUserId,
+      groupId: id,
+      price: adminAmount,
+      adminCreditAmount: adminAmount,
+      currencyCode: group.currencyCode,
+      paymentStatus: "complete",
+      type: "admin_commission",
+      referenceCode: `ADM-${year}${String(month).padStart(2, "0")}-${String(
+        winner._id
+      ).slice(-6)}`,
+      notes: `${adminPercent}% admin allocation from group payout`,
+    });
+  }
 
   // Notify the winner
   try {
@@ -787,6 +875,9 @@ export const spinGroupWheel = catchAsync(async (req, res) => {
       winnerUser: pick.userId,
       cycleNumber,
       amount: winningAmount,
+      adminAmount,
+      adminPercent,
+      wheelMode: group.wheelMode,
     },
   });
 });

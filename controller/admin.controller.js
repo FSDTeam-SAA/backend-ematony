@@ -8,13 +8,45 @@ import { SavingsGroup } from "../model/group.model.js";
 import { SupportTicket } from "../model/supportTicket.model.js";
 
 export const getDashboardStats = catchAsync(async (req, res) => {
-  const [totalUsers, totalPayments, revenueResult, pendingKyc, activeGroups, openIssues] =
+  const [
+    totalUsers,
+    totalPayments,
+    revenueResult,
+    lateFeeResult,
+    adminCommissionResult,
+    pendingKyc,
+    activeGroups,
+    openIssues,
+  ] =
     await Promise.all([
       User.countDocuments(),
       Payment.countDocuments(),
       Payment.aggregate([
         { $match: { paymentStatus: { $in: ["complete", "succeeded"] } } },
         { $group: { _id: null, totalRevenue: { $sum: "$price" } } },
+      ]),
+      Payment.aggregate([
+        {
+          $match: {
+            paymentStatus: { $in: ["complete", "succeeded"] },
+            type: "late_fee_admin_credit",
+          },
+        },
+        { $group: { _id: null, totalLateFeeRevenue: { $sum: "$price" } } },
+      ]),
+      Payment.aggregate([
+        {
+          $match: {
+            paymentStatus: { $in: ["complete", "succeeded"] },
+            type: "admin_commission",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalAdminCommissionRevenue: { $sum: "$price" },
+          },
+        },
       ]),
       KycVerification.countDocuments({ status: "pending" }),
       SavingsGroup.countDocuments({ status: { $in: ["open", "active"] } }),
@@ -29,6 +61,9 @@ export const getDashboardStats = catchAsync(async (req, res) => {
       totalUsers,
       totalPayments,
       totalRevenue: revenueResult[0]?.totalRevenue ?? 0,
+      lateFeeRevenue: lateFeeResult[0]?.totalLateFeeRevenue ?? 0,
+      adminCommissionRevenue:
+        adminCommissionResult[0]?.totalAdminCommissionRevenue ?? 0,
       pendingKyc,
       activeGroups,
       openIssues,

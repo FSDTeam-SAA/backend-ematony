@@ -73,22 +73,22 @@ const kycSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
-    stripeVerificationId: {
+    flutterwaveVerificationType: {
       type: String,
       trim: true,
       default: "",
     },
-    stripeVerificationUrl: {
+    flutterwaveVerificationId: {
       type: String,
       trim: true,
       default: "",
     },
-    stripeVerificationStatus: {
+    flutterwaveVerificationStatus: {
       type: String,
       trim: true,
       default: "",
     },
-    stripeLastError: {
+    flutterwaveLastError: {
       type: String,
       trim: true,
       default: "",
