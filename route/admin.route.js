@@ -1,6 +1,12 @@
 import express from "express";
 import { getDashboardStats } from "../controller/admin.controller.js";
 import {
+  createFaq,
+  deleteFaq,
+  listAdminFaqs,
+  updateFaq,
+} from "../controller/faq.controller.js";
+import {
   approveKyc,
   getKycList,
   rejectKyc,
@@ -42,5 +48,10 @@ router.post("/notifications", protect, isAdmin, sendNotification);
 router.get("/issues", protect, isAdmin, listAdminIssues);
 router.patch("/issues/:id/assign", protect, isAdmin, assignSupportIssue);
 router.patch("/issues/:id/status", protect, isAdmin, updateSupportIssueStatus);
+
+router.get("/faqs", protect, isAdmin, listAdminFaqs);
+router.post("/faqs", protect, isAdmin, createFaq);
+router.put("/faqs/:id", protect, isAdmin, updateFaq);
+router.delete("/faqs/:id", protect, isAdmin, deleteFaq);
 
 export default router;

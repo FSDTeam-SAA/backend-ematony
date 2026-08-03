@@ -1,18 +1,20 @@
 import nodemailer from 'nodemailer';
-export const sendEmail = async (to,subject, html) => {
+
+export const sendEmail = async (to, subject, html) => {
   const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT),
+    secure: process.env.SMTP_SECURE === 'true',
     auth: {
-      user: 'tahsin.bdcalling@gmail.com',
-      pass: 'lcnt cxiw pcui vikv',
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
   });
+
   await transporter.sendMail({
-    from: 'tahsin.bdcalling@gmail.com', // sender address
+    from: process.env.SMTP_FROM || process.env.SMTP_USER, // sender address
     to,
-    subject: subject? subject:  'Password change Link : change it by 10 minutes',
+    subject: subject ? subject : 'Password change Link : change it by 10 minutes',
     html,
   });
 };
