@@ -6,7 +6,6 @@ import cookieParser from "cookie-parser";
 import router from "./mainroute/index.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
-
 import globalErrorHandler from "./middleware/globalErrorHandler.js";
 import notFound from "./middleware/notFound.js";
 import { startNotificationScheduler } from "./services/notification.scheduler.js";
@@ -15,139 +14,452 @@ const app = express();
 
 app.set("trust proxy", true);
 
+/**
+ * =========================================================
+ * HTTP SERVER
+ * =========================================================
+ */
+
 const server = createServer(app);
-export const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
+
+/**
+ * =========================================================
+ * CORS CONFIGURATION
+ * =========================================================
+ *
+ * IMPORTANT:
+ * We cannot use:
+ *
+ * credentials: true
+ * origin: "*"
+ *
+ * Browsers do not allow wildcard origins with credentials.
+ */
+
+const allowedOrigins = [
+  "https://ajofamily.tech",
+  "https://www.ajofamily.tech",
+
+  // Local development
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+/**
+ * Express API CORS
+ */
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests without an Origin header.
+    // Useful for Postman, server-to-server requests, etc.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`CORS blocked origin: ${origin}`);
+
+    return callback(new Error("Not allowed by CORS"));
   },
-});
+
+  credentials: true,
+
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+  ],
+
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+};
+
+app.use(cors(corsOptions));
+
+/**
+ * =========================================================
+ * BODY PARSERS
+ * =========================================================
+ */
+
+app.use(express.json());
 
 app.use(
-  cors({
-    credentials: true,
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  express.urlencoded({
+    extended: true,
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+/**
+ * =========================================================
+ * COOKIE PARSER
+ * =========================================================
+ */
+
 app.use(cookieParser());
+
+/**
+ * =========================================================
+ * STATIC FILES
+ * =========================================================
+ */
 
 app.use("/public", express.static("public"));
 
-// ── Flutterwave checkout return page ──────────────────────────────────────
-// Flutterwave redirects the user's browser here after a hosted-checkout
-// payment completes (or is cancelled). The page bounces straight back into
-// the app via the configured deep-link scheme so the wallet screen can call
-// /payment/me/topup/confirm with the tx_ref.
+/**
+ * =========================================================
+ * FLUTTERWAVE PAYMENT RETURN
+ * =========================================================
+ *
+ * Flutterwave redirects the user's browser here after
+ * hosted checkout completes or is cancelled.
+ */
+
 app.get("/payments/return", (req, res) => {
   const status = String(req.query.status || "").toLowerCase();
+
   const txRef = String(req.query.tx_ref || "");
-  const transactionId = String(req.query.transaction_id || "");
-  const deepLinkScheme = process.env.APP_DEEP_LINK_SCHEME || "ematony";
 
+  const transactionId = String(
+    req.query.transaction_id || ""
+  );
+
+  const deepLinkScheme =
+    process.env.APP_DEEP_LINK_SCHEME || "ematony";
+
+  /**
+   * Build deep-link query parameters
+   */
   const params = new URLSearchParams();
-  if (status) params.append("status", status);
-  if (txRef) params.append("tx_ref", txRef);
-  if (transactionId) params.append("transaction_id", transactionId);
-  const qs = params.toString();
-  const deepLink = `${deepLinkScheme}://payments/return${qs ? `?${qs}` : ""}`;
 
-  const heading =
-    status === "successful" || status === "completed"
-      ? '<span style="color:#1d8569;font-weight:600">Payment received</span>'
-      : status === "cancelled"
-      ? '<span style="color:#b87600;font-weight:600">Payment cancelled</span>'
-      : "Returning to the app…";
+  if (status) {
+    params.append("status", status);
+  }
 
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Returning to Ajo Family…</title>
-  <style>
-    body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-           background:#FDF6EC; color:#0c2a23; min-height:100vh;
-           display:flex; align-items:center; justify-content:center; padding:24px; }
-    .card { background:#fff; padding:32px 28px; border-radius:18px; max-width:420px; width:100%;
-            box-shadow:0 6px 24px rgba(0,0,0,0.06); text-align:center; }
-    h1 { margin:0 0 8px; font-size:22px; color:#146456; }
-    p { margin:0 0 18px; color:#506b62; line-height:1.5; }
-    a.btn { display:inline-block; background:#146456; color:#fff; text-decoration:none;
-            padding:12px 22px; border-radius:12px; font-weight:600; }
-    .small { font-size:12px; color:#7B8A85; margin-top:18px; }
-  </style>
-  <script>
-    (function () {
-      var link = ${JSON.stringify(deepLink)};
-      window.location.replace(link);
-      setTimeout(function () { try { window.close(); } catch (e) {} }, 600);
-    })();
-  </script>
-</head>
-<body>
-  <div class="card">
-    <h1>${heading}</h1>
-    <p>You can close this tab and return to the Ajo Family app.</p>
-    <a class="btn" href="${deepLink}">Open Ajo Family</a>
-    <div class="small">If the app does not open automatically, tap the button above.</div>
-  </div>
-</body>
-</html>`);
+  if (txRef) {
+    params.append("tx_ref", txRef);
+  }
+
+  if (transactionId) {
+    params.append("transaction_id", transactionId);
+  }
+
+  const queryString = params.toString();
+
+  const deepLink = `${deepLinkScheme}://payments/return${
+    queryString ? `?${queryString}` : ""
+  }`;
+
+  /**
+   * Heading
+   */
+  let heading = "Returning to the app...";
+
+  if (
+    status === "successful" ||
+    status === "completed"
+  ) {
+    heading = "Payment received";
+  } else if (status === "cancelled") {
+    heading = "Payment cancelled";
+  }
+
+  /**
+   * HTML response
+   */
+  res.setHeader(
+    "Content-Type",
+    "text/html; charset=utf-8"
+  );
+
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0"
+        />
+
+        <title>Payment</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            font-family:
+              Arial,
+              Helvetica,
+              sans-serif;
+
+            background: #f5f7fa;
+            color: #222;
+          }
+
+          .container {
+            width: min(90%, 420px);
+
+            padding: 32px;
+
+            text-align: center;
+
+            background: #ffffff;
+
+            border-radius: 16px;
+
+            box-shadow:
+              0 10px 30px
+              rgba(0, 0, 0, 0.08);
+          }
+
+          h1 {
+            margin-bottom: 12px;
+          }
+
+          p {
+            color: #666;
+            line-height: 1.5;
+          }
+
+          .button {
+            display: inline-block;
+
+            margin-top: 20px;
+
+            padding: 12px 20px;
+
+            background: #0f766e;
+
+            color: #ffffff;
+
+            text-decoration: none;
+
+            border-radius: 8px;
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="container">
+
+          <h1>
+            ${heading}
+          </h1>
+
+          <p>
+            You will be redirected back to the app automatically.
+          </p>
+
+          <a
+            class="button"
+            href="${deepLink}"
+          >
+            Return to App
+          </a>
+
+        </div>
+
+        <script>
+          setTimeout(() => {
+            window.location.href =
+              ${JSON.stringify(deepLink)};
+          }, 1000);
+        </script>
+      </body>
+    </html>
+  `);
 });
 
-// Mount the main router
+/**
+ * =========================================================
+ * API ROUTES
+ * =========================================================
+ */
+
 app.use("/api/v1", router);
 
-// Basic route for testing
+/**
+ * =========================================================
+ * BASIC HEALTH CHECK
+ * =========================================================
+ */
+
 app.get("/", (req, res) => {
-  res.send("Server is running...!!");
+  res.status(200).json({
+    success: true,
+    message: "Server is running...!!",
+  });
 });
 
+/**
+ * =========================================================
+ * ERROR HANDLERS
+ * =========================================================
+ *
+ * These must come AFTER all routes.
+ */
+
 app.use(globalErrorHandler);
+
 app.use(notFound);
 
+/**
+ * =========================================================
+ * SOCKET.IO
+ * =========================================================
+ */
+
+export const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+
+    methods: [
+      "GET",
+      "POST",
+    ],
+
+    credentials: true,
+  },
+});
+
+/**
+ * =========================================================
+ * SOCKET.IO CONNECTION
+ * =========================================================
+ */
+
 io.on("connection", (socket) => {
-  console.log("A client connected:", socket.id);
+  console.log(
+    "A client connected:",
+    socket.id
+  );
+
+  /**
+   * =======================================================
+   * JOIN CHAT ROOM
+   * =======================================================
+   */
 
   socket.on("joinChatRoom", (userId) => {
-    if (userId) {
-      socket.join(`chat_${userId}`);
-      console.log(`Client ${socket.id} joined user room: ${userId}`);
+    if (!userId) {
+      return;
     }
+
+    const roomName = `chat_${userId}`;
+
+    socket.join(roomName);
+
+    console.log(
+      `Client ${socket.id} joined user room: ${userId}`
+    );
   });
 
+  /**
+   * =======================================================
+   * JOIN NOTIFICATION ROOM
+   * =======================================================
+   */
+
   socket.on("joinNotifications", (userId) => {
-    if (userId) {
-      socket.join(`user_${userId}`);
-      console.log(`Client ${socket.id} joined notifications: ${userId}`);
+    if (!userId) {
+      return;
     }
+
+    const roomName = `user_${userId}`;
+
+    socket.join(roomName);
+
+    console.log(
+      `Client ${socket.id} joined notifications: ${userId}`
+    );
   });
+
+  /**
+   * =======================================================
+   * JOIN ALERTS ROOM
+   * =======================================================
+   */
 
   socket.on("joinAlerts", () => {
     socket.join("alerts");
-    console.log(`Client ${socket.id} joined alerts room`);
+
+    console.log(
+      `Client ${socket.id} joined alerts room`
+    );
   });
 
+  /**
+   * =======================================================
+   * DISCONNECT
+   * =======================================================
+   */
+
   socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
+    console.log(
+      "Client disconnected:",
+      socket.id
+    );
   });
 });
 
+/**
+ * =========================================================
+ * SERVER START
+ * =========================================================
+ */
+
 const PORT = process.env.PORT || 5000;
+
 server.listen(PORT, async () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(
+    `Server is running on port ${PORT}`
+  );
 
   try {
-    await mongoose.connect(process.env.MONGO_DB_URL);
-    console.log("MongoDB connected");
+    /**
+     * MongoDB connection
+     */
+    await mongoose.connect(
+      process.env.MONGO_DB_URL
+    );
+
+    console.log(
+      "MongoDB connected"
+    );
+
+    /**
+     * Start notification scheduler
+     */
     startNotificationScheduler();
+
   } catch (err) {
-    console.error("MongoDB connection error:", err);
+    console.error(
+      "MongoDB connection error:",
+      err
+    );
+
     process.exit(1);
   }
 });
