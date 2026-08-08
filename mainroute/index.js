@@ -2,6 +2,7 @@ import express from "express";
 
 import adminRoute from "../route/admin.route.js";
 import authRoute from "../route/auth.route.js";
+import contentRoute from "../route/content.route.js";
 import payoutsRoute from "../route/connect.route.js";
 import dashboardRoute from "../route/dashboard.route.js";
 import faqRoute from "../route/faq.route.js";
@@ -17,6 +18,7 @@ const router = express.Router();
 // Mounting the routes
 router.use("/admin", adminRoute);
 router.use("/auth", authRoute);
+router.use("/content", contentRoute);
 router.use("/payouts", payoutsRoute);
 router.use("/dashboard", dashboardRoute);
 router.use("/faqs", faqRoute);

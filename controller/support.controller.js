@@ -201,6 +201,8 @@ export const listAdminIssues = catchAsync(async (req, res) => {
           $or: [
             { subject: { $regex: search, $options: "i" } },
             { message: { $regex: search, $options: "i" } },
+            { requesterName: { $regex: search, $options: "i" } },
+            { requesterEmail: { $regex: search, $options: "i" } },
           ],
         }
       : {}),
@@ -245,7 +247,7 @@ export const assignSupportIssue = catchAsync(async (req, res) => {
     },
     { new: true, runValidators: true }
   )
-    .populate("userId", "name email")
+    .populate("userId", "name firstName lastName email phone avatar")
     .populate("assignedAdminId", "name email role");
 
   if (!ticket) {
@@ -283,7 +285,7 @@ export const updateSupportIssueStatus = catchAsync(async (req, res) => {
     new: true,
     runValidators: true,
   })
-    .populate("userId", "name email")
+    .populate("userId", "name firstName lastName email phone avatar")
     .populate("assignedAdminId", "name email role");
 
   if (!ticket) {

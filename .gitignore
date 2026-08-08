@@ -138,3 +138,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 config.bat
+
+
+# ── SMTP / Email (nodemailer) ────────────────────────────────────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=info@ajofamily.tech
+SMTP_PASS=PtBz/7s7
+SMTP_FROM=info@ajofamily.tech

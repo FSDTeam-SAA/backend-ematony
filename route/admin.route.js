@@ -1,6 +1,18 @@
 import express from "express";
 import { getDashboardStats } from "../controller/admin.controller.js";
 import {
+  createTeamMember,
+  createTestimonial,
+  deleteTeamMember,
+  deleteTestimonial,
+  getAdminPage,
+  listAdminTeam,
+  listAdminTestimonials,
+  updateAdminPage,
+  updateTeamMember,
+  updateTestimonial,
+} from "../controller/content.controller.js";
+import {
   createFaq,
   deleteFaq,
   listAdminFaqs,
@@ -53,5 +65,18 @@ router.get("/faqs", protect, isAdmin, listAdminFaqs);
 router.post("/faqs", protect, isAdmin, createFaq);
 router.put("/faqs/:id", protect, isAdmin, updateFaq);
 router.delete("/faqs/:id", protect, isAdmin, deleteFaq);
+
+router.get("/content/:slug", protect, isAdmin, getAdminPage);
+router.put("/content/:slug", protect, isAdmin, updateAdminPage);
+
+router.get("/team", protect, isAdmin, listAdminTeam);
+router.post("/team", protect, isAdmin, createTeamMember);
+router.put("/team/:id", protect, isAdmin, updateTeamMember);
+router.delete("/team/:id", protect, isAdmin, deleteTeamMember);
+
+router.get("/testimonials", protect, isAdmin, listAdminTestimonials);
+router.post("/testimonials", protect, isAdmin, createTestimonial);
+router.put("/testimonials/:id", protect, isAdmin, updateTestimonial);
+router.delete("/testimonials/:id", protect, isAdmin, deleteTestimonial);
 
 export default router;

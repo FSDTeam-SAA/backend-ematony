@@ -5,7 +5,16 @@ const supportTicketSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      default: null,
+      index: true,
+    },
+    requesterName: { type: String, trim: true, default: "" },
+    requesterEmail: { type: String, trim: true, lowercase: true, default: "" },
+    requesterPhone: { type: String, trim: true, default: "" },
+    source: {
+      type: String,
+      enum: ["mobile_app", "website", "admin"],
+      default: "mobile_app",
       index: true,
     },
     groupId: {
