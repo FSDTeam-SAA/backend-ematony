@@ -37,6 +37,8 @@ const server = createServer(app);
  */
 
 const allowedOrigins = [
+  "https://jofamily.tech",
+  "https://www.jofamily.tech",
   "https://ajofamily.tech",
   "https://www.ajofamily.tech",
 
