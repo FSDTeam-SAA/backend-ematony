@@ -1,13 +1,14 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { TeamMember } from "../model/teamMember.model.js";
+import { founderVision } from "./team-content.js";
 
 const members = [
   {
     seedKey: "team-sample-1",
     name: "Team Member 1 (Sample)",
     role: "Founder & CEO",
-    bio: "Replace this sample with the founder's verified name, photo, and a short profile about the vision behind Ajo Family.",
+    bio: founderVision,
     imageUrl: "",
     sortOrder: 10,
     isPublished: true,

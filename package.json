@@ -13,7 +13,8 @@
     "seed:testimonials": "node scripts/seed-testimonials.js",
     "seed:testimonials:refresh": "node scripts/seed-testimonials.js --refresh",
     "seed:team": "node scripts/seed-team.js",
-    "seed:team:refresh": "node scripts/seed-team.js --refresh"
+    "seed:team:refresh": "node scripts/seed-team.js --refresh",
+    "update:founder-vision": "node scripts/update-founder-vision.js"
   },
   "author": "",
   "license": "ISC",
