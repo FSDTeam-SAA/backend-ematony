@@ -13,7 +13,7 @@ const defaults = {
   "about-ajo-family": {
     title: "A familiar tradition, made clearer",
     intro:
-      "Ajo Family by Ematony helps families, friends, and trusted communities organize rotating savings with shared visibility and a simple mobile experience.",
+      "Ajo Family helps families, friends, and trusted communities organize rotating savings with shared visibility and a simple mobile experience.",
     sections: [
       {
         title: "The tradition",
@@ -39,31 +39,31 @@ const defaults = {
     title: "Privacy Policy",
     updatedLabel: "August 3, 2026",
     intro:
-      "This Privacy Policy explains how Ematony collects, uses, protects, and shares information when people use Ajo Family group savings, wallet, verification, notification, and support services.",
+      "This Privacy Policy explains how Ajo Family collects, uses, protects, and shares information when people use its group savings, wallet, verification, notification, and support services.",
     sections: [
-      { title: "Information we collect", body: ["We may collect account details such as your name, email address, phone number, password, profile photo, and other information you provide when creating or updating an Ematony account.", "When you use group savings, wallet, KYC, payment, notification, and support features, we may collect related transaction records, group membership details, verification status, device information, and support messages."] },
+      { title: "Information we collect", body: ["We may collect account details such as your name, email address, phone number, password, profile photo, and other information you provide when creating or updating an Ajo Family account.", "When you use group savings, wallet, KYC, payment, notification, and support features, we may collect related transaction records, group membership details, verification status, device information, and support messages."] },
       { title: "How we use information", body: ["We use your information to create and secure your account, verify members, process contributions, show group progress, manage rotating payout activity, send notifications, and respond to support requests.", "We may also use information to improve product reliability, prevent misuse, investigate suspicious activity, and meet legal or regulatory obligations that apply to financial and identity-related services."] },
-      { title: "Payments and verification", body: ["Payment and identity verification services may be handled by trusted third-party providers. These providers process information needed to complete wallet funding, withdrawals, identity checks, fraud prevention, and payment reconciliation.", "Ematony does not ask you to share sensitive payment credentials outside approved payment or verification flows."] },
+      { title: "Payments and verification", body: ["Payment and identity verification services may be handled by trusted third-party providers. These providers process information needed to complete wallet funding, withdrawals, identity checks, fraud prevention, and payment reconciliation.", "Ajo Family does not ask you to share sensitive payment credentials outside approved payment or verification flows."] },
       { title: "Sharing information", body: ["We do not sell your personal information. We may share limited information with service providers, administrators, legal authorities, or other parties when needed to operate the service, enforce our terms, resolve disputes, or comply with law.", "Inside a savings group, certain member and contribution details may be visible to group participants or administrators so the group can operate transparently."] },
       { title: "Data security", body: ["We use reasonable technical and organizational safeguards to protect account, payment, group, and verification information. No online system can be guaranteed to be completely secure.", "You are responsible for keeping your login credentials private and for notifying us if you believe your account has been compromised."] },
       { title: "Your choices", body: ["You may update account information, manage notifications where available, or contact support to request help with account access, data correction, or account-related questions.", "Some records may need to be retained for security, fraud prevention, payment reconciliation, dispute handling, or legal compliance."] },
-      { title: "Contact", body: ["For privacy questions or requests, contact the Ematony support team through the official support details on this website or through the Ajo Family app."] },
+      { title: "Contact", body: ["For privacy questions or requests, contact the Ajo Family support team through the official support details on this website or through the app."] },
     ],
   },
   "terms-of-service": {
     title: "Terms of Service",
     updatedLabel: "August 3, 2026",
     intro:
-      "These Terms of Service describe the rules for using Ematony Ajo Family tools for group savings, rotating contributions, wallet activity, verification, notifications, and support.",
+      "These Terms of Service describe the rules for using Ajo Family tools for group savings, rotating contributions, wallet activity, verification, notifications, and support.",
     sections: [
-      { title: "Using Ematony", body: ["Ematony provides digital tools for trusted savings circles, group contributions, wallet activity, rotating payouts, member verification, notifications, and support workflows.", "You must provide accurate information, keep your account secure, and use the service only for lawful savings, contribution, and community investment activities."] },
-      { title: "Account responsibility", body: ["You are responsible for activity that occurs under your account. Do not share your password, OTP, or other authentication details with another person.", "Ematony may restrict, suspend, or close accounts that appear fraudulent, abusive, blocked by administrators, or inconsistent with these terms."] },
+      { title: "Using Ajo Family", body: ["Ajo Family provides digital tools for trusted savings circles, group contributions, wallet activity, rotating payouts, member verification, notifications, and support workflows.", "You must provide accurate information, keep your account secure, and use the service only for lawful savings, contribution, and community investment activities."] },
+      { title: "Account responsibility", body: ["You are responsible for activity that occurs under your account. Do not share your password, OTP, or other authentication details with another person.", "Ajo Family may restrict, suspend, or close accounts that appear fraudulent, abusive, blocked by administrators, or inconsistent with these terms."] },
       { title: "Groups and contributions", body: ["Each savings group may define its own member rules, contribution schedule, rotation order, payout expectations, and participation requirements. Members should review group details before joining or contributing.", "Group visibility is provided to help members understand payment status and upcoming rotations. Members remain responsible for understanding their obligations to their group."] },
       { title: "Payments and wallets", body: ["Wallet funding, withdrawals, payment processing, and payment status updates may depend on third-party payment providers, banking partners, network availability, and compliance checks.", "Fees, limits, processing times, reversals, failed payments, and verification requirements may apply depending on the payment method and provider."] },
-      { title: "Verification and compliance", body: ["Ematony may require identity verification, KYC review, or other checks before certain account, wallet, group, or payout features are available.", "You agree not to provide false identity information, use another person's account, avoid verification checks, or use Ematony for prohibited activity."] },
-      { title: "Support and disputes", body: ["Members can use support channels to report payment issues, group concerns, account access problems, or other service questions.", "Ematony may review records, group activity, payment information, and admin actions to help resolve issues, but group agreements between members may remain the responsibility of the group."] },
-      { title: "Changes to the service", body: ["We may update features, policies, fees, integrations, or these terms as the product develops or as legal and operational needs change.", "If you continue using Ematony after updates become effective, you accept the updated terms."] },
-      { title: "Contact", body: ["For questions about these Terms of Service, contact the Ematony support team through the official support details on this website or through the Ajo Family app."] },
+      { title: "Verification and compliance", body: ["Ajo Family may require identity verification, KYC review, or other checks before certain account, wallet, group, or payout features are available.", "You agree not to provide false identity information, use another person's account, avoid verification checks, or use Ajo Family for prohibited activity."] },
+      { title: "Support and disputes", body: ["Members can use support channels to report payment issues, group concerns, account access problems, or other service questions.", "Ajo Family may review records, group activity, payment information, and admin actions to help resolve issues, but group agreements between members may remain the responsibility of the group."] },
+      { title: "Changes to the service", body: ["We may update features, policies, fees, integrations, or these terms as the product develops or as legal and operational needs change.", "If you continue using Ajo Family after updates become effective, you accept the updated terms."] },
+      { title: "Contact", body: ["For questions about these Terms of Service, contact the Ajo Family support team through the official support details on this website or through the app."] },
     ],
   },
   contact: {
