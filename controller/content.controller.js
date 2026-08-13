@@ -82,7 +82,7 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 const getDefaultPage = (slug) => ({ slug, ...defaults[slug], isPublished: true });
 
 const richTextOptions = {
-  allowedTags: ["p", "br", "strong", "b", "em", "i", "u", "h2", "h3", "ul", "ol", "li", "blockquote", "a"],
+  allowedTags: ["p", "br", "strong", "b", "em", "i", "u", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "a"],
   allowedAttributes: { a: ["href", "target", "rel"] },
   allowedSchemes: ["http", "https", "mailto", "tel"],
   transformTags: {
